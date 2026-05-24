@@ -2,18 +2,17 @@
 # In charge of Typer command line.
 
 import typer
-# import time
-# from rich.progress import track
+import time
+from rich.progress import Progress, SpinnerColumn, TextColumn
+
+# def main():
+#     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
+#         task = progress.add_task("Processing...", total=None)
+#         # 여기에 실제 작업을 수행하는 코드를 추가할 수 있습니다.
+#         # 예: time.sleep(5)  # 작업 시뮬레이션
+#         progress.update(task, description="Done!")
 
 app = typer.Typer() # Typer 객체 생성, CLI 애플리케이션을 정의하는 데 사용
-
-# 예시로, 아이템을 처리하는 동안 진행 상황을 표시하는 함수
-# def process_items(items):
-#     total = 0
-#     for value in track(items, description="Processing items..."):
-#         time.sleep(0.01)
-#         total += 1
-#     print(f"Processed total: {total} items.")
 
 # Typer 명령어 정의, name 매개변수를 받아서 "Hello, {name}." 메시지를 출력하는 역할
 @app.command()
