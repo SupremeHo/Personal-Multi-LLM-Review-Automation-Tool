@@ -3,12 +3,16 @@
 
 import typer
 
-app = typer.Typer()
+#app = typer.Typer()
 
-@app.command()
-def hello(name: str):
-    """이름을 입력 받아 인사를 출력합니다."""
-    typer.echo(f"Hello {name}!")
+friend = typer.style("SupremeHo", bold=True)
 
+def main():
+    typer.echo(f"Hello, {friend}.")
+
+# 해당 Python 모듈이 메인으로 실행, 
+# Python으로 CLI 제작 시 대부분 필요한 if 조건 구문
 if __name__ == "__main__":
-    app()
+    # run() 메서드를 호출할 때 실행시킬 함수 전달
+    typer.run(main)
+    #app()
