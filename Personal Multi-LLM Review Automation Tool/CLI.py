@@ -3,18 +3,16 @@
 
 import typer
 
-app = typer.Typer() # Typer 객체 생성, CLI 애플리케이션을 정의하는 데 사용
+#app = typer.Typer()
 
-@app.command()
-def greeting(name: str):
-    typer.echo(f"Hello, {name}.") # greeting 명령어 정의, name 매개변수를 받아서 "Hello, {name}." 메시지를 출력하는 역할
+friend = typer.style("SupremeHo", bold=True)
 
-@app.command()
-def goodbye(name: str, formal: bool = False):
-    if formal:
-        typer.echo(f"Goodbye, Mr. {name}. I hope you have a good day.") # formal이 True일 때, 이름 앞에 "Mr."를 붙이고, 좋은 하루 되라는 메시지를 추가
-    else:
-        typer.echo(f"Goodbye, {name}. See you later.") # formal이 False일 때, 이름만 출력하고, 나중에 보자는 메시지를 추가
+def main():
+    typer.echo(f"Hello, {friend}.")
 
+# 해당 Python 모듈이 메인으로 실행, 
+# Python으로 CLI 제작 시 대부분 필요한 if 조건 구문
 if __name__ == "__main__":
-    app() # Typer 애플리케이션 실행, 명령어를 처리하고 사용자 입력을 받아들이는 역할
+    # run() 메서드를 호출할 때 실행시킬 함수 전달
+    typer.run(main)
+    #app()
