@@ -2,18 +2,18 @@
 # In charge of Typer command line.
 
 import typer
-import time
-from rich.progress import track
+# import time
+# from rich.progress import track
 
 app = typer.Typer() # Typer 객체 생성, CLI 애플리케이션을 정의하는 데 사용
 
 # 예시로, 아이템을 처리하는 동안 진행 상황을 표시하는 함수
-def process_items(items):
-    total = 0
-    for value in track(items, description="Processing items..."):
-        time.sleep(0.01)
-        total += 1
-    print(f"Processed total: {total} items.")
+# def process_items(items):
+#     total = 0
+#     for value in track(items, description="Processing items..."):
+#         time.sleep(0.01)
+#         total += 1
+#     print(f"Processed total: {total} items.")
 
 # Typer 명령어 정의, name 매개변수를 받아서 "Hello, {name}." 메시지를 출력하는 역할
 @app.command()
