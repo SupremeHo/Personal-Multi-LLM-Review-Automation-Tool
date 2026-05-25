@@ -8,19 +8,19 @@ import typer
 # def main():
 #     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
 #         task = progress.add_task("Processing...", total=None)
-#         # 여기에 실제 작업을 수행하는 코드를 추가할 수 있습니다.
-#         # 예: time.sleep(5)  # 작업 시뮬레이션
+#         # Simulate some work being done, such as calling an LLM or processing data. You can replace this with actual logic for your application.
+#         # ex) time.sleep(5)  # Simulating a delay for demonstration purposes
 #         progress.update(task, description="Done!")
 
-# Typer 객체 생성, CLI 애플리케이션을 정의하는 데 사용
+# Creating a Typer object, using to define a CLI application with multiple commands and options. Typer is a library for building command-line interfaces in Python, and it provides an easy way to create user-friendly CLI applications.
 app = typer.Typer()
 
-# greeting 명령어 정의, 이름과 성을 입력받아 인사 메시지를 출력
+# Defining the greeting command. Enter the first and last name to output a greeting message. The last name is optional, and if not provided, it will default to an empty string.
 @app.command()
 def greeting(name: str, lastname: str = ""):
     typer.echo(f"Hello, {name} {lastname}.")
 
-# goodbye 명령어 정의, 이름과 성을 입력받아 작별 인사 메시지를 출력, formal 옵션에 따라 메시지 형식이 달라짐
+# Defining the goodbye command. Enter the first and last name to output goodbye message. The last name is optional, and if not provided, it will default to an empty string. The formal option is a boolean flag.
 @app.command()
 def goodbye(name: str, lastname: str = "", formal: bool = False):
     if formal:
@@ -28,12 +28,12 @@ def goodbye(name: str, lastname: str = "", formal: bool = False):
     else:
         typer.echo(f"Goodbye, {name} {lastname}. See you later.")
 
-# 사용자로부터 질문을 입력받아 출력하는 명령어
+# Defining the ask command. Prompt the user for a question and output the question.
 @app.command()
 def ask():
     question = typer.prompt("What is your question?")
     typer.echo(f"You asked: {question}")
 
-# Typer 애플리케이션 실행, 명령어를 처리하고 사용자 입력을 받아들이는 역할
+# Run the Typer application, handling commands and accepting user input.
 if __name__ == "__main__":
     app()
