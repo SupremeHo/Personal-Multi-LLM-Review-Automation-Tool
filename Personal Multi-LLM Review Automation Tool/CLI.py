@@ -28,6 +28,12 @@ def goodbye(name: str, lastname: str = "", formal: bool = False):
     else:
         typer.echo(f"Goodbye, {name} {lastname}. See you later.")
 
+# 사용자로부터 질문을 입력받아 출력하는 명령어
+@app.command()
+def ask():
+    question = typer.prompt("What is your question?")
+    typer.echo(f"You asked: {question}")
+
 # Typer 애플리케이션 실행, 명령어를 처리하고 사용자 입력을 받아들이는 역할
 if __name__ == "__main__":
     app()
