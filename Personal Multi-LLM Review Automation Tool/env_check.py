@@ -18,7 +18,14 @@ if missing_vars:
     sys.exit(1)
 
 # If all required environment variables are set, print a confirmation message. This indicates that the application is ready to proceed with its main functionality.
-print("All environment variables are set.")
+print("All environment variables are set.\n")
+response = input("Would you want to check the values of the environment variables? (Print the first 16 characters of the API key for verification (avoid printing the entire key for security reasons)) (y/n): ")
+
+# If the user chooses to check the values of the environment variables, print the first 16 characters of each required environment variable. This allows the user to verify that the correct values have been loaded without exposing sensitive information like API keys.
+if response.lower() == "y":
+    for env_var in REQUIRED_VARS:
+        key_value_16_chars = os.getenv(env_var)[:16]
+        print(f"{env_var}: {key_value_16_chars}")
 
 # I'm considering whether to create a function to overwrite existing values.
 #load_dotenv(override=True) 
