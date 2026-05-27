@@ -5,9 +5,9 @@
 
 import os
 import time
+import pandas as pd
 import openai
 from openai import OpenAI
-import pandas as pd
 import env_check
 
 def main():
@@ -30,13 +30,13 @@ def main():
     else:
         print("\nSkipping model listing...\n")
 
-
-
     # 4) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
     try:
         # You can adjust the response style of the model by providing detailed parameters.
         LLM_response = client.chat.completions.create( 
             model="gpt-4o-mini",
+            temperature = 0.2,  # Adjust the creativity of the response (0.0 to 1.0)
+            #max_tokens = ,  # Limit the response length
             messages=[
                 {"role": "system", "content": "You are my personal assistant."},
                 {"role": "user", "content": "Please give a brief introduction about yourself."}
@@ -71,8 +71,6 @@ def main():
         # Handle rate limit error (we recommend using exponential backoff).
         print(f"OpenAI API request exceeded rate limit: {err}" + "\n")
         pass
-    else:
-        print(f"An error occurred: {err}" + "\n")
 
 if __name__ == "__main__":
     main()
