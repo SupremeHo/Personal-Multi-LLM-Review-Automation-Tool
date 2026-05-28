@@ -4,9 +4,9 @@ import os
 import sys
 from dotenv import load_dotenv
 
-print("Checking environment variables...\n")
-
 def check_environment_variables():
+    print("Checking environment variables...\n")
+    
     # 1) Load environment variables from .env file.
     load_dotenv()
 
