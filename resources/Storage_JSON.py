@@ -1,29 +1,33 @@
 # Module for outputting the user's questions, LLM's prompts, and metadata as JSON.
 
 import json
+import openai
 from openai import OpenAI
 from datetime import datetime
 
+def save_response_as_json(LLM_response):
+    # Create a dictionary to store the LLM response and metadata.
+    LLM_response_dict = {
+        "request_id": LLM_response.get("request_id", ""),
+        "created_at": LLM_response.get("created_at", ""),
+        "provider": LLM_response.get("provider", ""),
+        "model": LLM_response.get("model", ""),
+        "system_prompt": LLM_response.get("system_prompt", ""),
+        "user_prompt": LLM_response.get("user_prompt", ""),
+        "assistant_response": LLM_response.get("assistant_response", ""),
+        "usage": LLM_response.get("usage", {}),
+        "cost": LLM_response.get("cost", {}),
+        "finish_reason": LLM_response.get("finish_reason", ""),
+        "success": LLM_response.get("success", False),
+        "error": LLM_response.get("error", False)
+    }
 
-LLM_response = {
-    "request_id": "2026-05-27T12-45-30",
-    "created_at": "2026-05-27T12:45:30+09:00",
-    "provider": "openai",
-    "model": "gpt-4o-mini-2024-07-18",
-    "user_prompt": "Who are you?",
-    "assistant_response": "...",
-    "usage": {
-    "prompt_tokens": 25,
-    "completion_tokens": 70,
-    "total_tokens": 95
-    },
-    "cost": {
-        "input_usd": 0.00000375,
-        "output_usd": 0.000042,
-        "total_usd": 0.00004575
-    },
-    "finish_reason": "stop",
-    "success": true, # type: ignore
-    "error": null # type: ignore
-}
+    # Convert the LLM response to JSON format.
+    json_data = json.dumps(LLM_response_dict, indent=4)
+
+    # Save the JSON data to a file named "LLM_response.json".
+    with open("LLM_response.json", "w", encoding="utf-8") as json_file:
+        json_file.write(json_data)
+        
+    print("\nLLM response has been saved to LLM_response.json")
 
