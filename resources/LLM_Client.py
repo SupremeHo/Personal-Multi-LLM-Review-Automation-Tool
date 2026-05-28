@@ -5,6 +5,8 @@
 
 import openai
 from openai import OpenAI
+from datetime import datetime
+import Storage_JSON
 
 MODEL_NAME = "gpt-4o-mini"  # You can change this to the desired model, e.g., "gpt-4o", "gpt-3.5-turbo", etc.
 TEMPERATURE = 0     # Adjust the creativity of the response (0.0 to 1.0)
@@ -41,6 +43,9 @@ def ask_llm(system_prompt: str, user_question: str) -> dict:
         print(f"Prompt Tokens: {LLM_usage.prompt_tokens}")
         print(f"Completion Tokens: {LLM_usage.completion_tokens}")
         print(f"Total Tokens: {LLM_usage.total_tokens}")
+
+        # Save the LLM response and metadata as JSON using the function defined in Storage_JSON.py.
+        #Storage_JSON.save_response_as_json()
 
     # 3) Handle exceptions that may occur during the API call.
     except openai.RateLimitError as e:
