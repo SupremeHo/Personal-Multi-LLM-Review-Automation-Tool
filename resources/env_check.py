@@ -1,4 +1,4 @@
-# Environment variable check for application startup
+# Module for checking environment variables for application startup
 
 import os
 import sys
