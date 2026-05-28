@@ -6,7 +6,6 @@ from openai import OpenAI
 import env_check
 import LLM_Client
 import List_Models
-import Storage_JSON
 
 app = typer.Typer()
 
@@ -20,6 +19,7 @@ def ask(system_prompt: str, user_question: str):
     typer.echo(f"Your question: {user_question}")
     LLM_Client.ask_llm(system_prompt, user_question)
     
+# Defining the list-models command. This will list available models from the OpenAI API.
 @app.command()
 def list_models():
     List_Models.list_available_models(OpenAI())
