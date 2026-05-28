@@ -8,9 +8,13 @@ from openai import OpenAI
 import env_check
 import pandas as pd
 
+MODEL_NAME = "gpt-4o-mini"  # You can change this to the desired model, e.g., "gpt-4o", "gpt-3.5-turbo", etc.
+TEMPERATURE = 0     # Adjust the creativity of the response (0.0 to 1.0)
+MAX_TOKENS = 500    # Set a limit on the number of tokens in the response (optional)
+
 def ask_llm(user_question: str, system_prompt: str = "You are my personal assistant.") -> dict:
     # 1) Load environment variables from .env file with the check function defined in env_check.py.
-    env_check.check_environment_variables()
+    #env_check.check_environment_variables()
 
     # 2) Create an instance of the OpenAI client, which will be used to interact with the OpenAI API.
     client = OpenAI()
@@ -22,9 +26,9 @@ def ask_llm(user_question: str, system_prompt: str = "You are my personal assist
     try:
         # You can adjust the response style of the model by providing detailed parameters.
         LLM_response = client.chat.completions.create( 
-            model="gpt-4o-mini",
-            temperature = 0.2,  # Adjust the creativity of the response (0.0 to 1.0)
-            max_completion_tokens = 128, # Set a limit on the number of tokens in the response (optional)
+            model = MODEL_NAME,
+            temperature = TEMPERATURE,
+            max_completion_tokens = MAX_TOKENS,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_question}
@@ -47,17 +51,17 @@ def ask_llm(user_question: str, system_prompt: str = "You are my personal assist
         print(f"Total Tokens: {LLM_usage.total_tokens}")
 
     # 5) Handle exceptions that may occur during the API call.
-    except openai.RateLimitError as err:
+    except openai.RateLimitError as e:
         # Handle rate limit error (we recommend using exponential backoff).
-        print(f"OpenAI API request exceeded rate limit: {err}" + "\n")
+        print(f"OpenAI API request exceeded rate limit: {e}" + "\n")
         pass
-    except openai.APIConnectionError as err:
+    except openai.APIConnectionError as e:
         # Handle connection error here.
-        print(f"Failed to connect to OpenAI API: {err}" + "\n")
+        print(f"Failed to connect to OpenAI API: {e}" + "\n")
         pass
-    except openai.APIError as err:
+    except openai.APIError as e:
         # Handle API error here, e.g. retry or log.
-        print(f"OpenAI API returned an API Error: {err}" + "\n")
+        print(f"OpenAI API returned an API Error: {e}" + "\n")
         pass
 
 # Optional function to list all available models.
