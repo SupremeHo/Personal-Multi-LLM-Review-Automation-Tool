@@ -14,10 +14,7 @@ def ask_llm(system_prompt: str, user_question: str) -> dict:
     # 1) Create an instance of the OpenAI client, which will be used to interact with the OpenAI API.
     client = OpenAI()
 
-    # 2) List all available models or skip this process.
-    list_available_models(client)
-
-    # 3) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
+    # 2) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
     try:
         # You can adjust the response style of the model by providing detailed parameters.
         LLM_response = client.chat.completions.create( 
@@ -45,7 +42,7 @@ def ask_llm(system_prompt: str, user_question: str) -> dict:
         print(f"Completion Tokens: {LLM_usage.completion_tokens}")
         print(f"Total Tokens: {LLM_usage.total_tokens}")
 
-    # 4) Handle exceptions that may occur during the API call.
+    # 3) Handle exceptions that may occur during the API call.
     except openai.RateLimitError as e:
         # Handle rate limit error (we recommend using exponential backoff).
         print(f"OpenAI API request exceeded rate limit: {e}" + "\n")
@@ -59,15 +56,3 @@ def ask_llm(system_prompt: str, user_question: str) -> dict:
         print(f"OpenAI API returned an API Error: {e}" + "\n")
         pass
 
-# Optional function to list all available models.
-# You can choose to list all models or skip this step based on user input.
-def list_available_models(client: OpenAI):
-    if input("Do you want to list all available models? (y/n): ").lower() == "y":
-        models = client.models.list()
-        print("\n" + "======== Available GPT Models ========")
-        for model in models:
-            if 'gpt' in model.id:
-                print(model.id)
-        print("======== End of GPT Models ========\n")
-    else:
-        print("\nSkipping model listing...\n")
