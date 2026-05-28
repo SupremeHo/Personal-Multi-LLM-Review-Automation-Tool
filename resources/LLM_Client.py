@@ -5,24 +5,19 @@
 
 import openai
 from openai import OpenAI
-import env_check
-import pandas as pd
 
 MODEL_NAME = "gpt-4o-mini"  # You can change this to the desired model, e.g., "gpt-4o", "gpt-3.5-turbo", etc.
 TEMPERATURE = 0     # Adjust the creativity of the response (0.0 to 1.0)
 MAX_TOKENS = 500    # Set a limit on the number of tokens in the response (optional)
 
-def ask_llm(user_question: str, system_prompt: str = "You are my personal assistant.") -> dict:
-    # 1) Load environment variables from .env file with the check function defined in env_check.py.
-    #env_check.check_environment_variables()
-
-    # 2) Create an instance of the OpenAI client, which will be used to interact with the OpenAI API.
+def ask_llm(system_prompt: str, user_question: str) -> dict:
+    # 1) Create an instance of the OpenAI client, which will be used to interact with the OpenAI API.
     client = OpenAI()
 
-    # 3) List all available models or skip this process.
+    # 2) List all available models or skip this process.
     list_available_models(client)
 
-    # 4) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
+    # 3) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
     try:
         # You can adjust the response style of the model by providing detailed parameters.
         LLM_response = client.chat.completions.create( 
@@ -50,7 +45,7 @@ def ask_llm(user_question: str, system_prompt: str = "You are my personal assist
         print(f"Completion Tokens: {LLM_usage.completion_tokens}")
         print(f"Total Tokens: {LLM_usage.total_tokens}")
 
-    # 5) Handle exceptions that may occur during the API call.
+    # 4) Handle exceptions that may occur during the API call.
     except openai.RateLimitError as e:
         # Handle rate limit error (we recommend using exponential backoff).
         print(f"OpenAI API request exceeded rate limit: {e}" + "\n")
