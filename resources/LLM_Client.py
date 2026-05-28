@@ -1,4 +1,4 @@
-﻿# Calls to LLMs(GPT/Claude/Gemini/etc)
+﻿# Module for calling LLMs(GPT/Claude/Gemini/etc)
 
 # This code using OpenAI API calls GPT
 # You can replace it with calls to other LLMs like Claude or Gemini by changing the API endpoint and request format accordingly. 

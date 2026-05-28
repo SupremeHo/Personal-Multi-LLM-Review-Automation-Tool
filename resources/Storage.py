@@ -1,4 +1,6 @@
-﻿# SQLite database management.
-# Output the user's prompts, LLM responses, and metadata as JSON, and store them in a SQLite database for later retrieval and analysis.
+﻿# SQLite database management module.
+# Store them in a SQLite database for later retrieval and analysis.
 
+import json
+import sqlite3
 
