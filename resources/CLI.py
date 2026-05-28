@@ -5,6 +5,8 @@ import typer
 from openai import OpenAI
 import env_check
 import LLM_Client
+import List_Models
+import Storage_JSON
 
 app = typer.Typer()
 
@@ -20,8 +22,7 @@ def ask(system_prompt: str, user_question: str):
     
 @app.command()
 def list_models():
-    typer.echo("Listing available models...")
-    LLM_Client.list_available_models(OpenAI())
+    List_Models.list_available_models(OpenAI())
 
 # Not yet implemented. This command will list available models from the OpenAI API or a predefined list.
 @app.command()
