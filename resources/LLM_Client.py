@@ -3,32 +3,20 @@
 # This code using OpenAI API calls GPT
 # You can replace it with calls to other LLMs like Claude or Gemini by changing the API endpoint and request format accordingly. 
 
-import os
-import time
-import pandas as pd
 import openai
 from openai import OpenAI
 import env_check
+import pandas as pd
 
-def ask_llm():
+def ask_llm(user_question: str, system_prompt: str = "You are my personal assistant.") -> dict:
     # 1) Load environment variables from .env file with the check function defined in env_check.py.
     env_check.check_environment_variables()
 
     # 2) Create an instance of the OpenAI client, which will be used to interact with the OpenAI API.
     client = OpenAI()
 
-    # 3) Prompt the user to decide whether they want to list all available models.
-    list_models = input("Do you want to list all available models? (y/n): ").lower() == "y"
-
-    if list_models:
-        models = client.models.list()
-        print("\n" + "======== Available GPT Models ========")
-        for model in models:
-            if 'gpt' in model.id:
-                print(model.id)
-        print("======== End of GPT Models ========\n")
-    else:
-        print("\nSkipping model listing...\n")
+    # 3) List all available models or skip this process.
+    list_available_models(client)
 
     # 4) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
     try:
@@ -36,10 +24,10 @@ def ask_llm():
         LLM_response = client.chat.completions.create( 
             model="gpt-4o-mini",
             temperature = 0.2,  # Adjust the creativity of the response (0.0 to 1.0)
-            #max_completion_tokens = , # Set a limit on the number of tokens in the response (optional)
+            max_completion_tokens = 128, # Set a limit on the number of tokens in the response (optional)
             messages=[
-                {"role": "system", "content": "You are my personal assistant."},
-                {"role": "user", "content": "Please give a brief introduction about yourself."}
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_question}
             ]
         )
 
@@ -72,3 +60,15 @@ def ask_llm():
         print(f"OpenAI API returned an API Error: {err}" + "\n")
         pass
 
+# Optional function to list all available models.
+# You can choose to list all models or skip this step based on user input.
+def list_available_models(client: OpenAI):
+    if input("Do you want to list all available models? (y/n): ").lower() == "y":
+        models = client.models.list()
+        print("\n" + "======== Available GPT Models ========")
+        for model in models:
+            if 'gpt' in model.id:
+                print(model.id)
+        print("======== End of GPT Models ========\n")
+    else:
+        print("\nSkipping model listing...\n")
