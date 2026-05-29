@@ -3,14 +3,16 @@
 
 import typer
 from openai import OpenAI
-import env_check
+from env_check import check_environment_variables
 import LLM_Client
 import List_Models
 
 app = typer.Typer()
 
-# Load environment variables from .env file with the check function defined in env_check.py.
-env_check.check_environment_variables()
+# Load environment variables from .env file with the checking function defined in env_check.py.
+@app.command()
+def check_env():
+    check_environment_variables()
 
 # Defining the ask command. Prompt the user for a question and output the question.
 @app.command()
@@ -23,12 +25,6 @@ def ask(system_prompt: str, user_question: str):
 @app.command()
 def list_models():
     List_Models.list_available_models(OpenAI())
-
-# Not yet implemented. This command will list available models from the OpenAI API or a predefined list.
-@app.command()
-def models(name: str, lastname: str = ""):
-    typer.echo(f"Hello {name} {lastname}! Here are the available models.")
-    # You can add code here to list available models from the OpenAI API or a predefined list.
 
 # Not yet implemented. This command will show the user's history of questions and LLM responses.
 @app.command()
