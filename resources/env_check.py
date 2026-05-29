@@ -24,14 +24,17 @@ def check_environment_variables():
     print("All environment variables are set.\n")
 
     # 5) If the user chooses to check the values of the environment variables, print the first 16 characters of each required environment variable.
+    show_key_values_16_chars(REQUIRED_VARS)
+
+def show_key_values_16_chars(required_vars):
     check_values = input("Would you want to check the values of the environment variables? (Print the first 16 characters of the API key for verification (avoid printing the entire key for security reasons)) (y/n): ").lower() == "y"
 
     if check_values:
-        for env_var in REQUIRED_VARS:
+        for env_var in required_vars:
             key_value_16_chars = os.getenv(env_var)[:16]
             print(f"{env_var}: {key_value_16_chars}" + "\n")
     else:
-        print("\nSkipping environment variable value check...\n")
+        print("\nSkipping validation for environment variables...\n")
 
 # I'm considering whether to create a function to overwrite existing values.
 #load_dotenv(override=True) 
