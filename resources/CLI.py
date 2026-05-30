@@ -1,12 +1,11 @@
 ﻿# CLI module
 # In charge of Typer command line.
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from uuid import uuid4
-import time
 
-import typer
 from rich.progress import track
+import typer
 
 import env_check
 import llm_client
@@ -28,7 +27,7 @@ def check_env():
 @app.command()
 def ask(system_prompt: str, user_question: str):
     run_id = str(uuid4())
-    created_at = datetime.now(timezone.utc)
+    created_at = datetime.now(timezone(timedelta(hours = 9)))  # Set timezone to KST (UTC+9, Seoul)
 
     try:
         result = ask_gpt(system_prompt, user_question)
@@ -58,7 +57,9 @@ def ask(system_prompt: str, user_question: str):
 
         typer.echo(f"An error occurred: {e}")
     
-    append_jsonl("logs/GPT_call_logs.jsonl", log)
+    gpt_response_filename = f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
+
+    append_jsonl(f"logs/OpenAI/{gpt_response_filename}", log)
 
 
 # Defining the list-models command. This will list available models from the OpenAI API.
