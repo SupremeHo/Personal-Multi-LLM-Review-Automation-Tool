@@ -23,5 +23,6 @@ def append_jsonl(file_path: str, record: BaseModel | dict) -> None:
     with path.open("a", encoding = "utf-8") as json_file:
         json_file.write(json.dumps(json_data, ensure_ascii = False, indent = 4) + "\n")
 
-    print("\nLLM response has been saved to GPT_response.json\n")
+    # Print a message indicating that the LLM response has been saved, along with the file path.
+    print(f"\nLLM response has been saved to {file_path}\n")
 
