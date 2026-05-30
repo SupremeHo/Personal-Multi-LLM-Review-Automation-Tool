@@ -1,51 +1,46 @@
-﻿# Module for calling LLMs(GPT/Claude/Gemini/etc)
+﻿# Module for calling LLMs API(GPT/Claude/Gemini/etc)
+# Extract the required value from the response object.
+# Returns objects such as LLMCallResult, which contains the LLM response content and metadata such as tokens used, model name, and finish_reason.
 
 # This code using OpenAI API calls GPT
 # You can replace it with calls to other LLMs like Claude or Gemini by changing the API endpoint and request format accordingly. 
 
 import openai
 from openai import OpenAI
-from datetime import datetime
-import Storage_JSON
+from schemas import LLMCallResult, TokenUsage
 
-MODEL_NAME = "gpt-4o-mini"  # You can change this to the desired model, e.g., "gpt-4o", "gpt-3.5-turbo", etc.
-TEMPERATURE = 0     # Adjust the creativity of the response (0.0 to 1.0)
-MAX_TOKENS = 500    # Set a limit on the number of tokens in the response (optional)
+# 1) Create an instance of the OpenAI client, which will be used to interact with the OpenAI API.
+client = OpenAI()
 
-def ask_llm(system_prompt: str, user_question: str) -> dict:
-    # 1) Create an instance of the OpenAI client, which will be used to interact with the OpenAI API.
-    client = OpenAI()
-
-    # 2) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
+# 2) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
+def ask_gpt(system_prompt: str, user_question: str, model: str = "gpt-4o-mini") -> LLMCallResult:
     try:
         # You can adjust the response style of the model by providing detailed parameters.
-        LLM_response = client.chat.completions.create( 
-            model = MODEL_NAME,
-            temperature = TEMPERATURE,
-            max_completion_tokens = MAX_TOKENS,
-            messages=[
+        openai_response = client.chat.completions.create( 
+            model = model,
+            messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_question}
             ]
         )
 
-        LLM_choice = LLM_response.choices[0]
-        LLM_usage = LLM_response.usage
+        openai_choice = openai_response.choices[0]
+        openai_usage = openai_response.usage
 
-        # Print the response from the LLM, which contains the generated content based on the input messages.
-        print("\n" + "======== LLM's Response ========")
-        print(LLM_choice.message.content + "\n")
+        token_usage = TokenUsage(
+            prompt_tokens = openai_usage.prompt_tokens,
+            completion_tokens = openai_usage.completion_tokens,
+            total_tokens = openai_usage.total_tokens
+        )
 
-        # Outputs meta data such as the tokens used, model name, and finish_reason.
-        print("======== LLM Usage ========")
-        print(f"Model: {LLM_response.model}")
-        print(f"Finish Reason: {LLM_choice.finish_reason}")
-        print(f"Prompt Tokens: {LLM_usage.prompt_tokens}")
-        print(f"Completion Tokens: {LLM_usage.completion_tokens}")
-        print(f"Total Tokens: {LLM_usage.total_tokens}")
-
-        # Save the LLM response and metadata as JSON using the function defined in Storage_JSON.py.
-        #Storage_JSON.save_response_as_json()
+        return LLMCallResult(
+            provider = "OpenAI",
+            model = openai_response.model,
+            response_text = openai_choice.message.content,
+            usage = token_usage,
+            finish_reason = openai_choice.finish_reason,
+            raw_response_id = getattr(openai_response, "id", None)
+        )
 
     # 3) Handle exceptions that may occur during the API call.
     except openai.RateLimitError as e:
