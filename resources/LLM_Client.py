@@ -10,6 +10,7 @@ Returns objects such as LLMCallResult, which contains the LLM response content a
 import openai
 from openai import OpenAI
 from schemas import LLMCallResult, TokenUsage, CostInfo
+from count_cost import calculate_openai_cost
 
 # 1) Create an instance of the OpenAI client, which will be used to interact with the OpenAI API.
 client = OpenAI()
@@ -34,10 +35,16 @@ def ask_gpt(system_prompt: str, user_question: str, model: str = "gpt-4o-mini") 
         openai_choice = openai_response.choices[0]
         openai_usage = openai_response.usage
 
-        token_usage = TokenUsage(
+        token_usage_openai = TokenUsage(
             prompt_tokens = openai_usage.prompt_tokens,
             completion_tokens = openai_usage.completion_tokens,
             total_tokens = openai_usage.total_tokens
+        )
+
+        cost_openai = CostInfo(
+            input_usd = 10,
+            output_usd = 20,
+            total_usd = 30
         )
 
         # 3) Extract the relevant information from the OpenAI response and return it as an LLMCallResult object.
@@ -45,7 +52,8 @@ def ask_gpt(system_prompt: str, user_question: str, model: str = "gpt-4o-mini") 
             provider = "OpenAI",
             model = openai_response.model,
             response_text = openai_choice.message.content,
-            usage = token_usage,
+            usage = token_usage_openai,
+            cost = cost_openai,
             finish_reason = openai_choice.finish_reason,
             raw_response_id = getattr(openai_response, "id", None)
         )

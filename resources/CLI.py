@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
+import time
 
 from rich.progress import track
 import typer
@@ -26,11 +27,14 @@ def check_env():
 # Defining the ask command. Prompt the user for a question and output the question.
 @app.command()
 def ask(system_prompt: str, user_question: str):
-    run_id = str(uuid4())
-    created_at = datetime.now(timezone(timedelta(hours = 9)))  # Set timezone to KST (UTC+9, Seoul)
+    run_id = str(uuid4())                                       # Create a unique non-overlapping unique ID.
+    created_at = datetime.now(timezone(timedelta(hours = 9)))   # Set timezone to KST (UTC+9, Seoul).
+    start_time = time.time()                                    # Measure the time which API call starts.
 
     try:
         result = ask_gpt(system_prompt, user_question)
+
+        end_time = time.time()                                  # Measure the time which API call ends.
 
         log = LLMCallLog(
             run_id = run_id,
@@ -39,7 +43,7 @@ def ask(system_prompt: str, user_question: str):
             result = result,
             success = True,
             error = None,
-            elapsed_ms = None
+            elapsed_ms = (end_time - start_time) * 1000         # Calculate the elapsed_ms (milliseconds).
         )
 
         typer.echo(f"OpenAI GPT's Response:\n{result.response_text}\n")
@@ -52,7 +56,7 @@ def ask(system_prompt: str, user_question: str):
             result = None,
             success = False,
             error = str(e),
-            elapsed_ms = None
+            elapsed_ms = (end_time - start_time) * 1000         # Calculate the elapsed_ms (milliseconds).
         )
 
         typer.echo(f"An error occurred: {e}")

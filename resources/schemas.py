@@ -27,7 +27,7 @@ class LLMCallResult(BaseModel):
     model: str
     response_text: str
     usage: TokenUsage
-    #cost: CostInfo
+    cost: CostInfo
     finish_reason: Optional[str] = None
     raw_response_id: Optional[str] = None
 
