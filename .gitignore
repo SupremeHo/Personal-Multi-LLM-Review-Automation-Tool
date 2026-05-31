@@ -366,4 +366,6 @@ FodyWeavers.xsd
 
 # Visual Studio Code workspace settings
 .vscode/extensions.json
-resources/LLM_response_01.json
+
+# Custom workspace settings
+resources/Config
