@@ -1,5 +1,7 @@
-# Module for listing all available models.
-# You can choose to list all models or skip this step based on user input.
+"""
+Module for listing all available models.
+You can choose to list all models or skip this step based on user input.
+"""
 
 from openai import OpenAI
 

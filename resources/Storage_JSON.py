@@ -1,6 +1,8 @@
-# Module for outputting the user's questions, LLM's prompts, and metadata as JSON.
-# Save the received objects such as dict or Pydantic models as JSON/JSONL files.
-# Only take charges of saving the JSON/JSONL using the function defined in Storage_JSON.py.
+"""
+Module for outputting the user's questions, LLM's prompts, and metadata as JSON.
+Save the received objects such as dict or Pydantic models as JSON/JSONL files.
+Only take charges of saving the JSON/JSONL using the function defined in Storage_JSON.py.
+"""
 
 import json                         # For handling JSON data.
 from pathlib import Path            # For handling file paths and operations.

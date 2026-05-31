@@ -1,19 +1,26 @@
-﻿# Module for calling LLMs API(GPT/Claude/Gemini/etc)
-# Extract the required value from the response object.
-# Returns objects such as LLMCallResult, which contains the LLM response content and metadata such as tokens used, model name, and finish_reason.
+﻿"""
+Module for calling LLMs API(GPT/Claude/Gemini/etc)
+Extract the required value from the response object.
+Returns objects such as LLMCallResult, which contains the LLM response content and metadata such as tokens used, model name, and finish_reason.
+"""
 
 # This code using OpenAI API calls GPT
 # You can replace it with calls to other LLMs like Claude or Gemini by changing the API endpoint and request format accordingly. 
 
 import openai
 from openai import OpenAI
-from schemas import LLMCallResult, TokenUsage
+from schemas import LLMCallResult, TokenUsage, CostInfo
 
 # 1) Create an instance of the OpenAI client, which will be used to interact with the OpenAI API.
 client = OpenAI()
 
 # 2) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
 def ask_gpt(system_prompt: str, user_question: str, model: str = "gpt-4o-mini") -> LLMCallResult:
+    """
+    Call the OpenAI API to get a response from the specified model based on the provided system prompt and user question.
+    Returns an LLMCallResult object containing the response text and metadata.
+    """
+
     try:
         # You can adjust the response style of the model by providing detailed parameters.
         openai_response = client.chat.completions.create( 
@@ -33,6 +40,7 @@ def ask_gpt(system_prompt: str, user_question: str, model: str = "gpt-4o-mini") 
             total_tokens = openai_usage.total_tokens
         )
 
+        # 3) Extract the relevant information from the OpenAI response and return it as an LLMCallResult object.
         return LLMCallResult(
             provider = "OpenAI",
             model = openai_response.model,
@@ -42,7 +50,7 @@ def ask_gpt(system_prompt: str, user_question: str, model: str = "gpt-4o-mini") 
             raw_response_id = getattr(openai_response, "id", None)
         )
 
-    # 3) Handle exceptions that may occur during the API call.
+    # 4) Handle exceptions that may occur during the API call.
     except openai.RateLimitError as e:
         # Handle rate limit error (we recommend using exponential backoff).
         print(f"OpenAI API request exceeded rate limit: {e}" + "\n")

@@ -1,5 +1,4 @@
-﻿# CLI module
-# In charge of Typer command line.
+﻿"""CLI module in charge of Typer command line."""
 
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
@@ -22,6 +21,7 @@ app = typer.Typer()
 @app.command()
 def check_env():
     env_check.check_environment_variables()
+
 
 # Defining the ask command. Prompt the user for a question and output the question.
 @app.command()
@@ -67,6 +67,7 @@ def ask(system_prompt: str, user_question: str):
 def list_models():
     list_available_models(llm_client.client)
 
+
 # Not yet implemented. This command will show the user's history of questions and LLM responses.
 @app.command()
 def history(name: str, lastname: str = "", formal: bool = False):
@@ -74,6 +75,7 @@ def history(name: str, lastname: str = "", formal: bool = False):
         typer.echo(f"Hello, {name} {lastname}! Here is your history.")
     else:
         typer.echo(f"Hi {name}! Here is your history.")
+
 
 # Run the Typer application, handling commands and accepting user input.
 if __name__ == "__main__":

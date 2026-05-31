@@ -1,4 +1,4 @@
-# Module for checking environment variables for application startup
+"""Module for checking environment variables for application startup."""
 
 import os
 import sys
@@ -27,6 +27,10 @@ def check_environment_variables():
     show_key_values_16_chars(REQUIRED_VARS)
 
 def show_key_values_16_chars(required_vars):
+    """
+    you can
+    """
+
     check_values = input("Would you want to check the values of the environment variables? (Print the first 16 characters of the API key for verification (avoid printing the entire key for security reasons)) (y/n): ").lower() == "y"
 
     if check_values:
