@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>a5ec3dca-3ff6-4a10-a496-916d0cb060e5</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>Personal_Multi_LLM_Review_Automation_Tool.py</StartupFile>
+    <StartupFile>cli.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
