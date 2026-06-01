@@ -1,27 +1,63 @@
-"""Module that calculates the cost of API calls based on the number of tokens used and the model's pricing."""
+"""
+Module that calculates the cost of API calls based on the number of tokens used and the model's pricing.
+Read the API models' list stored in /config/prices/prices_openai.json and calculate the cost. 
+"""
 
-from schemas import TokenUsage, CostInfo
+import json
+from decimal import Decimal
+from pathlib import Path
 
-def calculate_openai_cost(token_usage: TokenUsage, model: str) -> CostInfo:
-    """
-    Calculate the cost of an OpenAI API call based on the token usage and model pricing.
-    This is a placeholder function. You should replace the pricing logic with actual costs based on OpenAI's pricing.
-    """
-    # Example pricing (these values are placeholders and should be updated with actual pricing):
-    model_pricing = {
-        "gpt-4o-mini": {"input_cost_per_1m_tokens": 0.015, "output_cost_per_1m_tokens": 0.06},
-        # Add other models and their pricing here
+# Load the model pricing JSON file and return it as a dictionary.
+def load_price_table(path: str | Path) -> dict:
+    try:
+        with Path(path).open("r", encoding="utf-8") as f:
+            return json.load(f)
+
+    except FileNotFoundError:
+        print(f"No such file or directory: {path}")
+
+
+def resolve_model_price(price_table: dict, model: str) -> dict:
+    try:
+        models = price_table["models"]
+        price = models[model]
+
+        if "alias_of" in price:
+            return models[price["alias_of"]]
+
+        return price
+
+    except:
+        if model not in models:
+            raise ValueError(f"Price for API's model '{model}' is not defined.")
+
+
+def calculate_text_cost(price_table: dict, model: str, input_tokens: int, output_tokens: int, cached_input_tokens: int = 0, ) -> dict:
+    price = resolve_model_price(price_table, model)
+
+    input_rate = Decimal(str(price["input"]))
+    cached_input_rate = Decimal(str(price.get("cached_input", price["input"])))
+    output_rate = Decimal(str(price["output"]))
+
+    normal_input_tokens = max(input_tokens - cached_input_tokens, 0)
+
+    input_cost = Decimal(normal_input_tokens) / Decimal(1_000_000) * input_rate
+    cached_input_cost = Decimal(cached_input_tokens) / Decimal(1_000_000) * cached_input_rate
+    output_cost = Decimal(output_tokens) / Decimal(1_000_000) * output_rate
+
+    total_cost = input_cost + cached_input_cost + output_cost
+
+    print(float(input_cost),float(cached_input_cost),float(output_cost),float(total_cost),price_table.get("updated_at"),price_table.get("source"))
+
+    return {
+        "input_usd": float(input_cost),
+        "cached_input_usd": float(cached_input_cost),
+        "output_usd": float(output_cost),
+        "total_usd": float(total_cost),
+        "estimated": True,
+        "pricing_updated_at": price_table.get("updated_at"),
+        "pricing_source": price_table.get("source"),
     }
 
-    if model not in model_pricing:
-        raise ValueError(f"Pricing information for model '{model}' is not available.")
 
-    input_cost = (token_usage.prompt_tokens / 1000000) * model_pricing[model]["input_cost_per_1m_tokens"]
-    output_cost = (token_usage.completion_tokens / 1000000) * model_pricing[model]["output_cost_per_1m_tokens"]
-    total_cost = input_cost + output_cost
-
-    return CostInfo(
-        input_usd = input_cost,
-        output_usd = output_cost,
-        total_usd = total_cost
-        )
+resolve_model_price(load_price_table(f"resources/config/prices/prices_openai.json"), "gpt-4o-mini")
