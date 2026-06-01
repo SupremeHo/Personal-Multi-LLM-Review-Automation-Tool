@@ -43,7 +43,7 @@ def ask(system_prompt: str, user_question: str):
             result = result,
             success = True,
             error = None,
-            elapsed_ms = (end_time - start_time) * 1000         # Calculate the elapsed_ms (milliseconds).
+            elapsed_sec = round((end_time - start_time), 3)         # Calculate the elapsed time (seconds) and round the value to third decimal place.
         )
 
         typer.echo(f"OpenAI GPT's Response:\n{result.response_text}\n")
@@ -56,14 +56,16 @@ def ask(system_prompt: str, user_question: str):
             result = None,
             success = False,
             error = str(e),
-            elapsed_ms = (end_time - start_time) * 1000         # Calculate the elapsed_ms (milliseconds).
+            elapsed_sec = round((end_time - start_time), 3)         # Calculate the elapsed time (seconds) and round the value to third decimal place.
         )
 
         typer.echo(f"An error occurred: {e}")
     
+    # Attatch the created time after the log's name.
     gpt_response_filename = f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
 
-    append_jsonl(f"logs/OpenAI/{gpt_response_filename}", log)
+    # Save the log as .jsonl file in specified path.
+    append_jsonl(f"resources/logs/OpenAI/{gpt_response_filename}", log)
 
 
 # Defining the list-models command. This will list available models from the OpenAI API.
