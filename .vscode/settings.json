@@ -42,9 +42,7 @@
     ],
     "chatgpt.composerEnterBehavior": "cmdIfMultiline",
     "chatgpt.reviewDelivery": "inline",
-    "editor.mouseWheelZoom": false,
-    "editor.fontSize": 20,
+    "editor.mouseWheelZoom": true,
     "editor.formatOnSave": true,
     "editor.formatOnPaste": true,
-    "markdown.preview.fontSize": 20,
 }
