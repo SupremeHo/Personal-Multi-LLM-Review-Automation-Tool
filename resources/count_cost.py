@@ -3,12 +3,17 @@ Module that calculates the cost of API calls based on the number of tokens used 
 Read the API models' list stored in /config/prices/prices_openai.json and calculate the cost. 
 """
 
+
 import json
 from decimal import Decimal
 from pathlib import Path
 
-# Load the model pricing JSON file and return it as a dictionary.
+
 def load_price_table(path: str | Path) -> dict:
+    """
+    Load the price table from a JSON file and return it as a dictionary.
+    If the file does not exist, print an error message.
+    """
     try:
         with Path(path).open("r", encoding="utf-8") as f:
             return json.load(f)
@@ -18,6 +23,11 @@ def load_price_table(path: str | Path) -> dict:
 
 
 def resolve_model_price(price_table: dict, model: str) -> dict:
+    """
+    Resolve the price for a given model from the price table.
+    If the model is an alias of another model, resolve the price of the original model.
+    If the model is not found in the price table, raise a ValueError.
+    """
     try:
         models = price_table["models"]
         price = models[model]
