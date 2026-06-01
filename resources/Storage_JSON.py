@@ -4,9 +4,11 @@ Save the received objects such as dict or Pydantic models as JSON/JSONL files.
 Only take charges of saving the JSON/JSONL using the function defined in Storage_JSON.py.
 """
 
+
 import json                         # For handling JSON data.
 from pathlib import Path            # For handling file paths and operations.
 from pydantic import BaseModel      # For defining structured data models.
+
 
 def append_jsonl(file_path: str, record: BaseModel | dict) -> None:
     """
