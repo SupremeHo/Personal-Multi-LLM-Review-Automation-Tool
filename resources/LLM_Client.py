@@ -3,17 +3,18 @@ Module for calling LLMs API(GPT/Claude/Gemini/etc)
 Extract the required value from the response object.
 Returns objects such as LLMCallResult, which contains the LLM response content and metadata such as tokens used, model name, and finish_reason.
 """
-
-# This code using OpenAI API calls GPT
-# You can replace it with calls to other LLMs like Claude or Gemini by changing the API endpoint and request format accordingly. 
+ 
 
 import openai
 from openai import OpenAI
+
 from schemas import LLMCallResult, TokenUsage, CostInfo
-from count_cost import calculate_openai_cost
+#from count_cost import calculate_openai_cost
+
 
 # 1) Create an instance of the OpenAI client, which will be used to interact with the OpenAI API.
 client = OpenAI()
+
 
 # 2) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
 def ask_gpt(system_prompt: str, user_question: str, model: str = "gpt-4o-mini") -> LLMCallResult:
@@ -35,12 +36,14 @@ def ask_gpt(system_prompt: str, user_question: str, model: str = "gpt-4o-mini") 
         openai_choice = openai_response.choices[0]
         openai_usage = openai_response.usage
 
+        # Calculate the cost of the API call based on the token usage and model pricing.
         token_usage_openai = TokenUsage(
             prompt_tokens = openai_usage.prompt_tokens,
             completion_tokens = openai_usage.completion_tokens,
             total_tokens = openai_usage.total_tokens
-        )
+        )   
 
+        # For demonstration purposes, we are using a placeholder cost calculation. You can replace it with the actual cost calculation based on the token usage and model pricing.
         cost_openai = CostInfo(
             input_usd = 10,
             output_usd = 20,
@@ -62,13 +65,9 @@ def ask_gpt(system_prompt: str, user_question: str, model: str = "gpt-4o-mini") 
     except openai.RateLimitError as e:
         # Handle rate limit error (we recommend using exponential backoff).
         print(f"OpenAI API request exceeded rate limit: {e}" + "\n")
-        pass
     except openai.APIConnectionError as e:
         # Handle connection error here.
         print(f"Failed to connect to OpenAI API: {e}" + "\n")
-        pass
     except openai.APIError as e:
         # Handle API error here, e.g. retry or log.
         print(f"OpenAI API returned an API Error: {e}" + "\n")
-        pass
-
