@@ -365,7 +365,7 @@ MigrationBackup/
 FodyWeavers.xsd
 
 # Visual Studio Code workspace settings
-.vscode
+.vscode/
 
 # Custom workspace settings
 resources/Config
