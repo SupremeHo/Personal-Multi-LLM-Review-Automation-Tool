@@ -1,0 +1,38 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"workbench.colorTheme": "Dark+",
+		"workbench.editorAssociations": {
+			"*.bin": "default"
+		},
+		"python.languageServer": "Pylance",
+		"workbench.editor.empty.hint": "hidden",
+		"workbench.editor.enablePreview": false,
+		"git.confirmSync": false,
+		"claudeCode.preferredLocation": "panel",
+		"github.copilot.enable": {
+			"*": true,
+			"plaintext": false,
+			"markdown": false,
+			"scminput": false,
+			"python": true
+		},
+		"resharper.solutionExplorer.trackActiveItem": true,
+		"python-envs.pythonProjects": [
+			{
+				"path": "resources",
+				"envManager": "ms-python.python:venv",
+				"packageManager": "ms-python.python:pip"
+			}
+		],
+		"editor.fontSize": 20,
+		"markdown.preview.fontSize": 14,
+		"debug.console.fontSize": 20,
+		"chat.fontSize": 16,
+		"chat.editor.fontSize": 20
+	}
+}
