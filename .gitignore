@@ -369,4 +369,4 @@ FodyWeavers.xsd
 
 # Custom workspace settings
 resources/Config
-*.code-workspace
+.code-workspace
