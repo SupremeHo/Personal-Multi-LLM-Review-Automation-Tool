@@ -37,4 +37,14 @@
         "generateSymbol": true,
         "convertFormatString": true
     },
+    "settingsSync.ignoredExtensions": [
+        "anthropic.claude-code"
+    ],
+    "chatgpt.composerEnterBehavior": "cmdIfMultiline",
+    "chatgpt.reviewDelivery": "inline",
+    "editor.mouseWheelZoom": true,
+    "editor.fontSize": 20,
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true,
+    "markdown.preview.fontSize": 20,
 }
