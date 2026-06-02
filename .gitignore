@@ -312,12 +312,6 @@ paket-files/
 # CodeRush personal settings
 .cr/personal
 
-# Python Tools for Visual Studio (PTVS)
-.venv/
-.env
-__pycache__/
-*.pyc
-
 # Cake - Uncomment if you are using it
 # tools/**
 # !tools/packages.config
@@ -367,7 +361,30 @@ FodyWeavers.xsd
 # Visual Studio Code workspace settings
 .vscode/
 
+# Environment variable files
+.env
+.env.*
+*.env
+
+# Python Tools for Visual Studio (PTVS)
+__pycache__/
+*.pyc
+venv/
+.venv/
+.python-version
+
+# Vector DB · Database files
+.chroma/
+*.sqlite
+*.db
+chroma_db/
+
+# OS
+.DS_Store
+Thumbs.db
+
 # Custom workspace settings
-resources/Config
+.idea/
 .venv_py312/
 .venv_py313/
+resources/Config
