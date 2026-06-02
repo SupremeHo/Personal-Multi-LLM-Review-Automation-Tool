@@ -369,5 +369,5 @@ FodyWeavers.xsd
 
 # Custom workspace settings
 resources/Config
-.venv312/
-.venv313/
+.venv_py312/
+.venv_py313/
