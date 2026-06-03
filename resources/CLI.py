@@ -1,4 +1,4 @@
-﻿"""CLI module in charge of Typer command line."""
+"""CLI module in charge of Typer command line."""
 
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
@@ -27,44 +27,52 @@ def check_env():
 # Defining the ask command. Prompt the user for a question and output the question.
 @app.command()
 def ask(system_prompt: str, user_question: str):
-    run_id = str(uuid4())                                       # Create a unique non-overlapping unique ID.
-    created_at = datetime.now(timezone(timedelta(hours = 9)))   # Set timezone to KST (UTC+9, Seoul).
-    start_time = time.time()                                    # Measure the time which API call starts.
+    run_id = str(uuid4())  # Create a unique non-overlapping unique ID.
+    created_at = datetime.now(
+        timezone(timedelta(hours=9))
+    )  # Set timezone to KST (UTC+9, Seoul).
+    start_time = time.time()  # Measure the time which API call starts.
 
     try:
         result = ask_gpt(system_prompt, user_question)
 
-        end_time = time.time()                                  # Measure the time which API call ends.
+        end_time = time.time()  # Measure the time which API call ends.
 
         log = LLMCallLog(
-            run_id = run_id,
-            created_at = created_at,
-            user_prompt = user_question,
-            result = result,
-            success = True,
-            error = None,
-            elapsed_sec = round((end_time - start_time), 3)         # Calculate the elapsed time (seconds) and round the value to third decimal place.
+            run_id=run_id,
+            created_at=created_at,
+            user_prompt=user_question,
+            result=result,
+            success=True,
+            error=None,
+            elapsed_sec=round(
+                (end_time - start_time), 3
+            ),  # Calculate the elapsed time (seconds) and round the value to third decimal place.
         )
 
         typer.echo(f"OpenAI GPT's Response:\n{result.response_text}\n")
 
     except Exception as e:
-        end_time = time.time()                                  # Measure the time which API call ends.
+        end_time = time.time()  # Measure the time which API call ends.
 
         log = LLMCallLog(
-            run_id = run_id,
-            created_at = created_at,
-            user_prompt = user_question,
-            result = None,
-            success = False,
-            error = str(e),
-            elapsed_sec = round((end_time - start_time), 3)         # Calculate the elapsed time (seconds) and round the value to third decimal place.
+            run_id=run_id,
+            created_at=created_at,
+            user_prompt=user_question,
+            result=None,
+            success=False,
+            error=str(e),
+            elapsed_sec=round(
+                (end_time - start_time), 3
+            ),  # Calculate the elapsed time (seconds) and round the value to third decimal place.
         )
 
         typer.echo(f"An error occurred: {e}")
-    
+
     # Attatch the created time after the log's name.
-    gpt_response_filename = f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
+    gpt_response_filename = (
+        f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
+    )
 
     # Save the log as .jsonl file in specified path.
     append_jsonl(f"resources/logs/OpenAI/{gpt_response_filename}", log)

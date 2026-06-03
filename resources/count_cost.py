@@ -1,6 +1,6 @@
 """
 Module that calculates the cost of API calls based on the number of tokens used and the model's pricing.
-Read the API models' list stored in /config/prices/prices_openai.json and calculate the cost. 
+Read the API models' list stored in /config/prices/prices_openai.json and calculate the cost.
 """
 
 import json
@@ -15,7 +15,7 @@ def load_price_table(path: str | Path) -> dict:
     """
     try:
         with Path(path).open("r", encoding="utf-8") as f:
-            #print(f"Price table loaded from {path}")
+            # print(f"Price table loaded from {path}")
             return json.load(f)
 
     except FileNotFoundError:
@@ -23,9 +23,9 @@ def load_price_table(path: str | Path) -> dict:
 
 
 def resolve_model_entry(
-        price_table: dict,
-        model_name: str,
-        )-> dict:
+    price_table: dict,
+    model_name: str,
+) -> dict:
     """
     Resolve the price for a given model from the price table.
     If the model is an alias of another model, resolve the price of the original model.
@@ -45,24 +45,23 @@ def resolve_model_entry(
 
         if current_model not in models:
             raise KeyError(f"Alias model {current_model} was not found in price table.")
-        
+
         current_entry = models[current_model]
-    
+
     return current_model, current_entry
 
 
 def calculate_openai_cost(
-        price_table: dict,
-        model_name: str,
-        input_tokens: int,
-        output_tokens: int,
-        cached_input_tokens: int = 0
-        ) -> dict:
+    price_table: dict,
+    model_name: str,
+    input_tokens: int,
+    output_tokens: int,
+    cached_input_tokens: int = 0,
+) -> dict:
     """
     Calculate the cost of an API call based on the model's pricing and the number of tokens used.
     Handle both normal input tokens and cached input tokens, applying the appropriate rates for each.
     """
-    
 
 
 # if __name__ == "__main__":

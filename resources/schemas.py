@@ -3,7 +3,6 @@ Schemas for defining the structure of the LLM response and metadata as Pydantic'
 The structure containing the LLM response content and metadata such as tokens used, model name, and finish_reason.
 """
 
-
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict
@@ -11,6 +10,7 @@ from pydantic import BaseModel, ConfigDict
 
 class TokenUsage(BaseModel):
     """Define a Pydantic models to represent the structure of the LLM's response and metadata."""
+
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
@@ -19,6 +19,7 @@ class TokenUsage(BaseModel):
 
 class CostInfo(BaseModel):
     """Define a Pydantic model to represent the cost information of the LLM's call, including input, output, and total cost in USD."""
+
     input_usd: float
     output_usd: float
     total_usd: float
@@ -28,7 +29,10 @@ class CostInfo(BaseModel):
 
 class LLMCallResult(BaseModel):
     """Define a Pydantic model to represent the result of an LLM's call, including the response text, token usage, and other metadata."""
-    model_config = ConfigDict(extra="forbid")   # Forbid extra fields to ensure strict adherence to the defined schema.
+
+    model_config = ConfigDict(
+        extra="forbid"
+    )  # Forbid extra fields to ensure strict adherence to the defined schema.
 
     provider: str
     model: str
@@ -41,7 +45,10 @@ class LLMCallResult(BaseModel):
 
 class LLMCallLog(BaseModel):
     """Define a Pydantic model to represent the log of an LLM's call."""
-    model_config = ConfigDict(extra="forbid")   # Forbid extra fields to ensure strict adherence to the defined schema.
+
+    model_config = ConfigDict(
+        extra="forbid"
+    )  # Forbid extra fields to ensure strict adherence to the defined schema.
 
     run_id: str
     created_at: datetime
@@ -50,4 +57,3 @@ class LLMCallLog(BaseModel):
     success: bool
     error: Optional[str] = None
     elapsed_sec: Optional[float] = None
-
