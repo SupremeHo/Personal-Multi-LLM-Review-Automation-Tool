@@ -24,7 +24,7 @@
 		"resharper.solutionExplorer.trackActiveItem": true,
 		"python-envs.pythonProjects": [
 			{
-				"path": "resources",
+				"path": ".",
 				"envManager": "ms-python.python:venv",
 				"packageManager": "ms-python.python:pip"
 			}
