@@ -49,6 +49,8 @@ def ask(system_prompt: str, user_question: str):
         typer.echo(f"OpenAI GPT's Response:\n{result.response_text}\n")
 
     except Exception as e:
+        end_time = time.time()                                  # Measure the time which API call ends.
+
         log = LLMCallLog(
             run_id = run_id,
             created_at = created_at,

@@ -9,7 +9,7 @@ import openai
 from openai import OpenAI
 
 from schemas import LLMCallResult, TokenUsage, CostInfo
-#from count_cost import calculate_openai_cost
+from count_cost import load_price_table, calculate_openai_cost
 
 
 # 1) Create an instance of the OpenAI client, which will be used to interact with the OpenAI API.
@@ -36,18 +36,23 @@ def ask_gpt(system_prompt: str, user_question: str, model: str = "gpt-4o-mini") 
         openai_choice = openai_response.choices[0]
         openai_usage = openai_response.usage
 
-        # Calculate the cost of the API call based on the token usage and model pricing.
+        # Extract token usage information from the OpenAI response and create a TokenUsage object.
         token_usage_openai = TokenUsage(
             prompt_tokens = openai_usage.prompt_tokens,
             completion_tokens = openai_usage.completion_tokens,
-            total_tokens = openai_usage.total_tokens
+            total_tokens = openai_usage.total_tokens,
+            cached_tokens = openai_usage.prompt_tokens_details.cached_tokens if openai_usage.prompt_tokens_details else None
         )   
 
-        # For demonstration purposes, we are using a placeholder cost calculation. You can replace it with the actual cost calculation based on the token usage and model pricing.
+        # Calculate the cost of the API call based on the token usage and the model's pricing, and create a CostInfo object.
         cost_openai = CostInfo(
-            input_usd = 10,
-            output_usd = 20,
-            total_usd = 30
+            calculate_openai_cost(
+                price_table = load_price_table("resources/config/prices/prices_openai.json"),  # You should provide the actual price table for accurate cost calculation.
+                model_name = model,
+                input_tokens = openai_usage.prompt_tokens,
+                output_tokens = openai_usage.completion_tokens,
+                cached_input_tokens = token_usage_openai.cached_tokens or 0
+            )
         )
 
         # 3) Extract the relevant information from the OpenAI response and return it as an LLMCallResult object.

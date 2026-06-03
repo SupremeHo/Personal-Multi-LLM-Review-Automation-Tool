@@ -14,6 +14,7 @@ class TokenUsage(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
+    cached_tokens: Optional[int] = None
 
 
 class CostInfo(BaseModel):
@@ -21,6 +22,8 @@ class CostInfo(BaseModel):
     input_usd: float
     output_usd: float
     total_usd: float
+    cached_input_usd: Optional[float] = None
+    estimated: Optional[bool] = None
 
 
 class LLMCallResult(BaseModel):
