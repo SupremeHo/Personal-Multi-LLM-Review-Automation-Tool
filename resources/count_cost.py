@@ -35,20 +35,21 @@ def resolve_model_entry(
     models = price_table.get("models", {})
 
     if model_name not in models:
-        raise KeyError(f"Price info for model '{model_name}' was not found.")
+        raise KeyError(f"Price table for model '{model_name}' was not found.")
 
-    current_model = model_name
-    current_entry = models[current_model]
+    price = models[model_name]
 
-    while "alias_of" in current_entry:
-        current_model = current_entry["alias_of"]
+    if "alias_of" in price:
+        return models[price["alias_of"]]
 
-        if current_model not in models:
-            raise KeyError(f"Alias model {current_model} was not found in price table.")
+    return price
 
-        current_entry = models[current_model]
 
-    return current_model, current_entry
+def to_decimal(value: int | float | str | None) -> Decimal | None:
+    if value is None:
+        return None
+
+    return Decimal(str(value))
 
 
 def calculate_openai_cost(
@@ -62,6 +63,39 @@ def calculate_openai_cost(
     Calculate the cost of an API call based on the model's pricing and the number of tokens used.
     Handle both normal input tokens and cached input tokens, applying the appropriate rates for each.
     """
+
+    price = resolve_model_entry(price_table, model_name)
+
+    input_rate = to_decimal(price["input"])
+    cached_input_rate = to_decimal(price.get("cached_input"))
+    output_rate = to_decimal(price["output"])
+
+    normal_input_tokens = max(input_tokens - cached_input_tokens, 0)
+
+    input_cost = Decimal(normal_input_tokens) / Decimal(1_000_000) * input_rate
+
+    cached_input_cost = Decimal("0")
+    
+    if cached_input_tokens > 0:
+        cached_input_cost = (
+            Decimal(cached_input_tokens)
+            / Decimal(1_000_000)
+            * cached_input_rate
+            )
+
+    output_cost = Decimal(output_tokens) / Decimal(1_000_000) * output_rate
+
+    total_cost = input_cost + cached_input_cost + output_cost
+
+    return {
+        "input_usd": float(input_cost),
+        "cached_input_usd": float(cached_input_cost),
+        "output_usd": float(output_cost),
+        "total_usd": float(total_cost),
+        "estimated": True,
+        "pricing_updated_at": price_table.get("updated_at"),
+        "pricing_source": price_table.get("source"),
+    }
 
 
 # if __name__ == "__main__":

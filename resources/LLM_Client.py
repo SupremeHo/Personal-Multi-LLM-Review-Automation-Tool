@@ -1,4 +1,4 @@
-"""
+﻿"""
 Module for calling LLMs API(GPT/Claude/Gemini/etc)
 Extract the required value from the response object.
 Returns objects such as LLMCallResult, which contains the LLM response content and metadata such as tokens used, model name, and finish_reason.
@@ -17,7 +17,7 @@ client = OpenAI()
 
 # 2) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
 def ask_gpt(
-    system_prompt: str, user_question: str, model: str = "gpt-4o-mini"
+    system_prompt: str, user_question: str, selected_model: str = "gpt-4o-mini"
 ) -> LLMCallResult:
     """
     Call the OpenAI API to get a response from the specified model based on the provided system prompt and user question.
@@ -27,7 +27,7 @@ def ask_gpt(
     try:
         # You can adjust the response style of the model by providing detailed parameters.
         openai_response = client.chat.completions.create(
-            model=model,
+            model=selected_model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_question},
@@ -42,22 +42,28 @@ def ask_gpt(
             prompt_tokens=openai_usage.prompt_tokens,
             completion_tokens=openai_usage.completion_tokens,
             total_tokens=openai_usage.total_tokens,
-            cached_tokens=openai_usage.prompt_tokens_details.cached_tokens
-            if openai_usage.prompt_tokens_details
-            else None,
+            cached_tokens=openai_usage.prompt_tokens_details.cached_tokens if openai_usage.prompt_tokens_details else None,
         )
 
         # Calculate the cost of the API call based on the token usage and the model's pricing, and create a CostInfo object.
-        cost_openai = CostInfo(
-            calculate_openai_cost(
-                price_table=load_price_table(
-                    "resources/config/prices/prices_openai.json"
-                ),  # You should provide the actual price table for accurate cost calculation.
-                model_name=model,
-                input_tokens=openai_usage.prompt_tokens,
-                output_tokens=openai_usage.completion_tokens,
-                cached_input_tokens=token_usage_openai.cached_tokens or 0,
-            )
+        price_table_openai = load_price_table("resources/config/prices/prices_openai.json")
+
+        cost_openai = calculate_openai_cost(
+            price_table=price_table_openai,
+            model_name=openai_response.model,
+            input_tokens=openai_usage.prompt_tokens,
+            output_tokens=openai_usage.completion_tokens,
+            cached_input_tokens=openai_usage.prompt_tokens_details.cached_tokens if openai_usage.prompt_tokens_details else None
+        )
+
+        cost_info_openai = CostInfo(
+            input_usd=cost_openai.get("input_usd"),
+            cached_input_usd=cost_openai.get("cached_input_usd"),
+            output_usd=cost_openai.get("output_usd"),
+            total_usd=cost_openai.get("total_usd"),
+            estimated=cost_openai.get("estimated"),
+            pricing_updated_at=cost_openai.get("pricing_updated_at"),
+            pricing_source=cost_openai.get("pricing_source")
         )
 
         # 3) Extract the relevant information from the OpenAI response and return it as an LLMCallResult object.
@@ -66,7 +72,7 @@ def ask_gpt(
             model=openai_response.model,
             response_text=openai_choice.message.content,
             usage=token_usage_openai,
-            cost=cost_openai,
+            cost=cost_info_openai,
             finish_reason=openai_choice.finish_reason,
             raw_response_id=getattr(openai_response, "id", None),
         )

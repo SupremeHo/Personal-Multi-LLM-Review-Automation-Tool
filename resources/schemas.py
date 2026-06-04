@@ -21,10 +21,12 @@ class CostInfo(BaseModel):
     """Define a Pydantic model to represent the cost information of the LLM's call, including input, output, and total cost in USD."""
 
     input_usd: float
+    cached_input_usd: Optional[float] = None
     output_usd: float
     total_usd: float
-    cached_input_usd: Optional[float] = None
     estimated: Optional[bool] = None
+    pricing_updated_at: Optional[str] = None
+    pricing_source: Optional[str] = None
 
 
 class LLMCallResult(BaseModel):
