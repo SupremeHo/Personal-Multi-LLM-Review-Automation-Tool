@@ -33,9 +33,15 @@ exclude = [
   "venv",
 ]
 
+extend-include = ["*.ipynb"]
+
 [tool.ruff.lint]
 # 활성화할 규칙들
-select = []
+select = [
+  "E", # pycodestyle errors
+  "W", # pycodestyle warnings
+  "F", # Pyflakes
+]
 
 # 무시할 규칙들
 ignore = [

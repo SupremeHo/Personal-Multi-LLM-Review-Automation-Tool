@@ -1,10 +1,10 @@
-"""CLI module in charge of Typer command line."""
+﻿"""CLI module in charge of Typer command line."""
 
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 import time
 
-from rich.progress import track
+#from rich.progress import track
 import typer
 
 import env_check
@@ -50,7 +50,8 @@ def ask(system_prompt: str, user_question: str):
             ),  # Calculate the elapsed time (seconds) and round the value to third decimal place.
         )
 
-        typer.echo(f"OpenAI GPT's Response:\n{result.response_text}\n")
+        typer.echo("\n==== OpenAI GPT's Response ====\n")
+        typer.echo(f"{result.response_text}\n")
 
     except Exception as e:
         end_time = time.time()  # Measure the time which API call ends.

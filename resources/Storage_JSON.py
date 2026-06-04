@@ -28,3 +28,11 @@ def append_jsonl(file_path: str, record: BaseModel | dict) -> None:
 
     # Print a message indicating that the LLM response has been saved, along with the file path.
     print(f"\nLLM response has been saved to {file_path}\n")
+
+
+def save_jsonl():
+    print("temp")
+
+
+def load_jsonl():
+    print("temp")

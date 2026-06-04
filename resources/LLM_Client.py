@@ -16,9 +16,7 @@ client = OpenAI()
 
 
 # 2) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
-def ask_gpt(
-    system_prompt: str, user_question: str, selected_model: str = "gpt-4o-mini"
-) -> LLMCallResult:
+def ask_gpt(system_prompt: str, user_question: str, selected_model: str = "gpt-4o-mini") -> LLMCallResult:
     """
     Call the OpenAI API to get a response from the specified model based on the provided system prompt and user question.
     Returns an LLMCallResult object containing the response text and metadata.
@@ -53,7 +51,9 @@ def ask_gpt(
             model_name=openai_response.model,
             input_tokens=openai_usage.prompt_tokens,
             output_tokens=openai_usage.completion_tokens,
-            cached_input_tokens=openai_usage.prompt_tokens_details.cached_tokens if openai_usage.prompt_tokens_details else None
+            cached_input_tokens=openai_usage.prompt_tokens_details.cached_tokens
+            if openai_usage.prompt_tokens_details
+            else None,
         )
 
         cost_info_openai = CostInfo(
@@ -63,13 +63,14 @@ def ask_gpt(
             total_usd=cost_openai.get("total_usd"),
             estimated=cost_openai.get("estimated"),
             pricing_updated_at=cost_openai.get("pricing_updated_at"),
-            pricing_source=cost_openai.get("pricing_source")
+            pricing_source=cost_openai.get("pricing_source"),
         )
 
         # 3) Extract the relevant information from the OpenAI response and return it as an LLMCallResult object.
         return LLMCallResult(
             provider="OpenAI",
             model=openai_response.model,
+            system_prompt=system_prompt,
             response_text=openai_choice.message.content,
             usage=token_usage_openai,
             cost=cost_info_openai,

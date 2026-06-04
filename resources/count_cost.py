@@ -75,13 +75,9 @@ def calculate_openai_cost(
     input_cost = Decimal(normal_input_tokens) / Decimal(1_000_000) * input_rate
 
     cached_input_cost = Decimal("0")
-    
+
     if cached_input_tokens > 0:
-        cached_input_cost = (
-            Decimal(cached_input_tokens)
-            / Decimal(1_000_000)
-            * cached_input_rate
-            )
+        cached_input_cost = Decimal(cached_input_tokens) / Decimal(1_000_000) * cached_input_rate
 
     output_cost = Decimal(output_tokens) / Decimal(1_000_000) * output_rate
 

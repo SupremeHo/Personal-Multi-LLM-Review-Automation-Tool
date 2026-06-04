@@ -32,12 +32,11 @@ class CostInfo(BaseModel):
 class LLMCallResult(BaseModel):
     """Define a Pydantic model to represent the result of an LLM's call, including the response text, token usage, and other metadata."""
 
-    model_config = ConfigDict(
-        extra="forbid"
-    )  # Forbid extra fields to ensure strict adherence to the defined schema.
+    model_config = ConfigDict(extra="forbid")  # Forbid extra fields to ensure strict adherence to the defined schema.
 
     provider: str
     model: str
+    system_prompt: str
     response_text: str
     usage: TokenUsage
     cost: CostInfo
@@ -48,9 +47,7 @@ class LLMCallResult(BaseModel):
 class LLMCallLog(BaseModel):
     """Define a Pydantic model to represent the log of an LLM's call."""
 
-    model_config = ConfigDict(
-        extra="forbid"
-    )  # Forbid extra fields to ensure strict adherence to the defined schema.
+    model_config = ConfigDict(extra="forbid")  # Forbid extra fields to ensure strict adherence to the defined schema.
 
     run_id: str
     created_at: datetime
