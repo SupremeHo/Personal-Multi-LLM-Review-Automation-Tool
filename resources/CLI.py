@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 import time
 
-#from rich.progress import track
+# from rich.progress import track
 import typer
 
 import env_check
@@ -28,9 +28,7 @@ def check_env():
 @app.command()
 def ask(system_prompt: str, user_question: str):
     run_id = str(uuid4())  # Create a unique non-overlapping unique ID.
-    created_at = datetime.now(
-        timezone(timedelta(hours=9))
-    )  # Set timezone to KST (UTC+9, Seoul).
+    created_at = datetime.now(timezone(timedelta(hours=9)))  # Set timezone to KST (UTC+9, Seoul).
     start_time = time.time()  # Measure the time which API call starts.
 
     try:
@@ -42,12 +40,12 @@ def ask(system_prompt: str, user_question: str):
             run_id=run_id,
             created_at=created_at,
             user_prompt=user_question,
-            result=result,
             success=True,
             error=None,
             elapsed_sec=round(
                 (end_time - start_time), 3
             ),  # Calculate the elapsed time (seconds) and round the value to third decimal place.
+            result=result,
         )
 
         typer.echo("\n==== OpenAI GPT's Response ====\n")
@@ -60,20 +58,18 @@ def ask(system_prompt: str, user_question: str):
             run_id=run_id,
             created_at=created_at,
             user_prompt=user_question,
-            result=None,
             success=False,
             error=str(e),
             elapsed_sec=round(
                 (end_time - start_time), 3
             ),  # Calculate the elapsed time (seconds) and round the value to third decimal place.
+            result=None,
         )
 
         typer.echo(f"An error occurred: {e}")
 
     # Attatch the created time after the log's name.
-    gpt_response_filename = (
-        f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
-    )
+    gpt_response_filename = f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
 
     # Save the log as .jsonl file in specified path.
     append_jsonl(f"resources/logs/OpenAI/{gpt_response_filename}", log)

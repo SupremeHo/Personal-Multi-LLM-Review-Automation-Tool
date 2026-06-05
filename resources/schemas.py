@@ -38,10 +38,10 @@ class LLMCallResult(BaseModel):
     model: str
     system_prompt: str
     response_text: str
-    usage: TokenUsage
-    cost: CostInfo
     finish_reason: Optional[str] = None
     raw_response_id: Optional[str] = None
+    usage: TokenUsage
+    cost: CostInfo
 
 
 class LLMCallLog(BaseModel):
@@ -52,7 +52,7 @@ class LLMCallLog(BaseModel):
     run_id: str
     created_at: datetime
     user_prompt: str
-    result: Optional[LLMCallResult] = None
     success: bool
     error: Optional[str] = None
     elapsed_sec: Optional[float] = None
+    result: Optional[LLMCallResult] = None

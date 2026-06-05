@@ -72,10 +72,10 @@ def ask_gpt(system_prompt: str, user_question: str, selected_model: str = "gpt-4
             model=openai_response.model,
             system_prompt=system_prompt,
             response_text=openai_choice.message.content,
-            usage=token_usage_openai,
-            cost=cost_info_openai,
             finish_reason=openai_choice.finish_reason,
             raw_response_id=getattr(openai_response, "id", None),
+            usage=token_usage_openai,
+            cost=cost_info_openai,
         )
 
     # 4) Handle exceptions that may occur during the API call.
