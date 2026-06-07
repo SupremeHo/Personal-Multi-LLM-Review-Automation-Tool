@@ -384,6 +384,7 @@ chroma_db/
 Thumbs.db
 
 # Custom workspace settings
+*.sql
 .idea/
 .venv_py312/
 .venv_py313/
