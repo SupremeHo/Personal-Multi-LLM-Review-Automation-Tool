@@ -70,7 +70,6 @@ def ask_gpt(system_prompt: str, user_question: str, selected_model: str = "gpt-4
         return LLMCallResult(
             provider="OpenAI",
             model=openai_response.model,
-            system_prompt=system_prompt,
             response_text=openai_choice.message.content,
             finish_reason=openai_choice.finish_reason,
             raw_response_id=getattr(openai_response, "id", None),

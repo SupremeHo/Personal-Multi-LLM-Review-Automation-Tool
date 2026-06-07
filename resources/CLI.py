@@ -39,6 +39,7 @@ def ask(system_prompt: str, user_question: str):
         log = LLMCallLog(
             run_id=run_id,
             created_at=created_at,
+            system_prompt=system_prompt,
             user_prompt=user_question,
             success=True,
             error=None,

@@ -36,7 +36,6 @@ class LLMCallResult(BaseModel):
 
     provider: str
     model: str
-    system_prompt: str
     response_text: str
     finish_reason: Optional[str] = None
     raw_response_id: Optional[str] = None
@@ -51,6 +50,7 @@ class LLMCallLog(BaseModel):
 
     run_id: str
     created_at: datetime
+    system_prompt: str
     user_prompt: str
     success: bool
     error: Optional[str] = None
