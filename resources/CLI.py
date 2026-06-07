@@ -11,8 +11,11 @@ import env_check
 import llm_client
 from list_models import list_available_models
 from llm_client import ask_gpt
-from storage_json import append_jsonl
 from schemas import LLMCallLog
+from storage_json import append_jsonl
+from storage_sqlite import import_jsonl_to_sqlite
+
+DB_PATH = "D:/My Documents/Dev_Python/Personal Multi-LLM Review Automation Tool/resources/db/sqlite.db"
 
 
 app = typer.Typer()
@@ -73,7 +76,10 @@ def ask(system_prompt: str, user_question: str):
     gpt_response_filename = f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
 
     # Save the log as .jsonl file in specified path.
-    append_jsonl(f"resources/logs/OpenAI/{gpt_response_filename}", log)
+    jsonl_path = f"resources/logs/OpenAI/{gpt_response_filename}"
+    append_jsonl(jsonl_path, log)
+
+    import_jsonl_to_sqlite(jsonl_path, DB_PATH)
 
 
 # Defining the list-models command. This will list available models from the OpenAI API.
