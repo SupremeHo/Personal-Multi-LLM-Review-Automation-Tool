@@ -4,7 +4,7 @@ The structure containing the LLM response content and metadata such as tokens us
 """
 
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -14,19 +14,19 @@ class TokenUsage(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
-    cached_tokens: Optional[int] = None
+    cached_tokens: int | None = None
 
 
 class CostInfo(BaseModel):
     """Define a Pydantic model to represent the cost information of the LLM's call, including input, output, and total cost in USD."""
 
     input_usd: float
-    cached_input_usd: Optional[float] = None
+    cached_input_usd: float | None = None
     output_usd: float
     total_usd: float
-    estimated: Optional[bool] = None
-    pricing_updated_at: Optional[str] = None
-    pricing_source: Optional[str] = None
+    estimated: bool | None = None
+    pricing_updated_at: str | None = None
+    pricing_source: str | None = None
 
 
 class LLMCallResult(BaseModel):
@@ -37,8 +37,8 @@ class LLMCallResult(BaseModel):
     provider: str
     model: str
     response_text: str
-    finish_reason: Optional[str] = None
-    raw_response_id: Optional[str] = None
+    finish_reason: str | None = None
+    raw_response_id: str | None = None
     usage: TokenUsage
     cost: CostInfo
 
@@ -53,6 +53,6 @@ class LLMCallLog(BaseModel):
     system_prompt: str
     user_prompt: str
     success: bool
-    error: Optional[str] = None
-    elapsed_sec: Optional[float] = None
-    result: Optional[LLMCallResult] = None
+    error: str | None = None
+    elapsed_sec: float | None = None
+    result: LLMCallResult | None = None
