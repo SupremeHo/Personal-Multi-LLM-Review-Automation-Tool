@@ -1,14 +1,25 @@
+[project]
+name = "Personal Multi-LLM Review Automation Tool"
+dynamic = ["version"]
+description = "A multi-LLM platform that automates cross-validation of answers from multiple LLMs."
+readme = "README.md"
+
+[project.urls]
+Homepage = "https://github.com/SupremeHo/Personal-Multi-LLM-Review-Automation-Tool"
+Repository = "https://github.com/SupremeHo/Personal-Multi-LLM-Review-Automation-Tool"
+Issues = "https://github.com/SupremeHo/Personal-Multi-LLM-Review-Automation-Tool/issues"
+
+[project.scripts]
+
+[dependency-groups]
+
 [tool.ruff]
-# 대상 Python 버전 - 설정하지 않으면 모든 파이썬 버전 대상으로 진행
 target-version = "py312"
 
-# 한 줄 최대 길이
 line-length = 128
 
-# 들여쓰기 너비
 indent-width = 4
 
-# 제외할 파일/디렉토리
 exclude = [
   ".bzr",
   ".direnv",
@@ -36,30 +47,31 @@ exclude = [
 extend-include = ["*.ipynb"]
 
 [tool.ruff.lint]
-# 활성화할 규칙들
 select = [
-  "E", # pycodestyle errors
-  "W", # pycodestyle warnings
-  "F", # Pyflakes
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # Pyflakes
+  "I",   # isort
+  "B",   # flake8-bugbear
+  "C4",  # flake8-comprehensions
+  "UP",  # pyupgrade
+  "TID", # flake8-tidy-imports
 ]
 
-# 무시할 규칙들
 ignore = [
-  "E501", # line too long
-  "B008", # do not perform function calls in argument defaults
+  "E501",   # line too long
+  "B008",   # do not perform function calls in argument defaults
+  "C901",   # too complex
+  "TID252", # relative imports okay
 ]
 
-# 파일별로 규칙 무시
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]   # imported but unused
 "tests/**/*.py" = ["S101"] # use of assert
 
 [tool.ruff.format]
-# 문자열 따옴표 스타일
 quote-style = "double"
 
-# 들여쓰기 스타일
 indent-style = "space"
 
-# 후행 쉼표 처리
 skip-magic-trailing-comma = false
