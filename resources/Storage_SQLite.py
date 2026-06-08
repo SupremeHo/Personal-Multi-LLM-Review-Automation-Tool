@@ -15,7 +15,7 @@ def load_json(jsonl_path) -> dict:
     """
     Load the jsonl file about LLM's log and convert it into a dict.
     """
-    with open(jsonl_path, "r", encoding="utf-8") as file:
+    with open(jsonl_path, encoding="utf-8") as file:
         record = json.load(file)
         return record
 

@@ -1,8 +1,8 @@
 ﻿"""CLI module in charge of Typer command line."""
 
+import time  # noqa: I001
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
-import time
 
 # from rich.progress import track
 import typer
