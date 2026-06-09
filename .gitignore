@@ -371,6 +371,7 @@ __pycache__/
 *.pyc
 venv/
 .venv/
+.pyproj
 .python-version
 
 # Vector DB · Database files
