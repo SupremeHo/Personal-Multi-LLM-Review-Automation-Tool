@@ -2,10 +2,11 @@
 
 import time  # noqa: I001
 from datetime import datetime
+from pathlib import Path
 from uuid import uuid4
 
-# from rich.progress import track
 import typer
+# from rich.progress import track
 
 import env_check
 import llm_client
@@ -15,8 +16,8 @@ from schemas import LLMCallLog
 from storage_json import append_jsonl
 from storage_sqlite import import_jsonl_to_sqlite
 
-DB_PATH = "D:/My Documents/Dev_Python/Personal Multi-LLM Review Automation Tool/resources/db/sqlite.db"
-
+BASE_DIR = Path(__file__).resolve().parent
+DB_PATH = BASE_DIR / "db" / "sqlite.db"
 
 app = typer.Typer()
 
