@@ -1,14 +1,9 @@
-﻿"""
-Module for SQLite database management.
-Store them in a SQLite database for later retrieval and analysis.
-"""
+﻿# Module for SQLite database management.
+# Store them in a SQLite database for later retrieval and analysis.
 
 import json
 import sqlite3
 import uuid
-
-# JSONL_PATH = "D:/My Documents/Dev_Python/Personal Multi-LLM Review Automation Tool/resources/logs/OpenAI/gpt_response_log_.jsonl"
-# DB_PATH = "D:/My Documents/Dev_Python/Personal Multi-LLM Review Automation Tool/resources/db/sqlite.db"
 
 
 def load_json(jsonl_path) -> dict:

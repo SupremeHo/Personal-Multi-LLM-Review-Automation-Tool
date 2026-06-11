@@ -1,7 +1,5 @@
-"""
-Schemas for defining the structure of the LLM response and metadata as Pydantic's BaseModel.
-The structure containing the LLM response content and metadata such as tokens used, model name, and finish_reason.
-"""
+# Schemas for defining the structure of the LLM response and metadata as Pydantic's BaseModel.
+# The structure containing the LLM response content and metadata such as tokens used, model name, and finish_reason.
 
 from datetime import datetime
 
