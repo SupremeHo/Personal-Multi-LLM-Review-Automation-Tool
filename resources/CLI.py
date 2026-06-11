@@ -1,7 +1,7 @@
-﻿"""CLI module in charge of Typer command line."""
+﻿# CLI module in charge of Typer command line.
 
 import time  # noqa: I001
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from uuid import uuid4
 
 # from rich.progress import track
@@ -21,17 +21,11 @@ DB_PATH = "D:/My Documents/Dev_Python/Personal Multi-LLM Review Automation Tool/
 app = typer.Typer()
 
 
-# Load environment variables from .env file with the checking function defined in env_check.py.
-@app.command()
-def check_env():
-    env_check.check_environment_variables()
-
-
 # Defining the ask command. Prompt the user for a question and output the question.
 @app.command()
 def ask(system_prompt: str, user_question: str):
     run_id = str(uuid4())  # Create a unique non-overlapping unique ID.
-    created_at = datetime.now(timezone(timedelta(hours=9)))  # Set timezone to KST (UTC+9, Seoul).
+    created_at = datetime.now()
     start_time = time.time()  # Measure the time which API call starts.
 
     try:
@@ -80,6 +74,12 @@ def ask(system_prompt: str, user_question: str):
     append_jsonl(jsonl_path, log)
 
     import_jsonl_to_sqlite(jsonl_path, DB_PATH)
+
+
+# Load environment variables from .env file with the checking function defined in env_check.py.
+@app.command()
+def check_env():
+    env_check.check_environment_variables()
 
 
 # Defining the list-models command. This will list available models from the OpenAI API.
