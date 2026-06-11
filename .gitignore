@@ -390,3 +390,4 @@ Thumbs.db
 .venv_py312/
 .venv_py313/
 resources/Config
+*.mmd
