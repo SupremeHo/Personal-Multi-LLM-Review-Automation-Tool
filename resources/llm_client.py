@@ -10,7 +10,10 @@ from count_cost import load_price_table, calculate_openai_cost
 
 
 # 1) Create an instance of the OpenAI client, which will be used to interact with the OpenAI API.
-client = OpenAI()
+try:
+    client = OpenAI()
+except openai.OpenAIError as e:
+    print(e)
 
 
 # 2) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
