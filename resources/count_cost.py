@@ -1,6 +1,7 @@
 # Module that calculates the cost of API calls based on the number of tokens used and the model's pricing.
 # Read the API models' list stored in /config/prices/prices_openai.json and calculate the cost.
 
+import datetime
 import json
 from decimal import Decimal
 from pathlib import Path
@@ -80,6 +81,8 @@ def calculate_openai_cost(
 
     total_cost = input_cost + cached_input_cost + output_cost
 
+    notice_price_tag_update(update_at=price_table.get("updated_at"))
+
     return {
         "input_usd": float(input_cost),
         "cached_input_usd": float(cached_input_cost),
@@ -89,6 +92,17 @@ def calculate_openai_cost(
         "pricing_updated_at": price_table.get("updated_at"),
         "pricing_source": price_table.get("source"),
     }
+
+
+def notice_price_tag_update(updated_at):
+    """Notice an alert for renewal if it's been 30 days since the update about price information."""
+    today_obj = datetime.datetime.now()
+    updated_at_obj = datetime.datetime.strptime(updated_at, "%Y-%m-%d")
+
+    days_delta = today_obj - updated_at_obj
+
+    if days_delta.days > 30:
+        print("⚠️ Token unit price information is over 30 days old. Check the price_****.json.")
 
 
 # if __name__ == "__main__":
