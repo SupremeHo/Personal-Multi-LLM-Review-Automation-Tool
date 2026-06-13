@@ -9,11 +9,11 @@ from openai import OpenAI
 
 
 def list_available_models(client_openai: OpenAI, client_anthropic: Anthropic, client_google: genai):
-    """"""
+    """The function to ask users whether they want to list the available LLM models or not"""
     while True:
         try:
             print(
-                "Would you like to list the available API's models? Please select and enter one of the three companies. (OpenAI, Anthropic, or Google)"
+                "\nWould you like to list the available API's models? Please select and enter one of the three companies. (OpenAI, Anthropic, or Google)"
             )
             answer = input(
                 "If you want to check the all available models, input the word 'Yes'. If you want to skip, input the word 'No': "
@@ -39,13 +39,12 @@ def list_available_models(client_openai: OpenAI, client_anthropic: Anthropic, cl
             else:
                 print("\nError. Please enter your input correctly.\n")
                 continue
-        except ValueError as e:
-            sys.exit(e + " Invalid value input. Exit the program.")
+        except Exception as e:
+            sys.exit(e + "Invalid value input. Exit the program.")
 
 
 def list_available_openai_models(client=OpenAI()):
     """The function listing the available models in OpenAI."""
-
     try:
         models = client.models.list()
         print("\n" + "======== Available OpenAI's Models ========")
@@ -59,7 +58,6 @@ def list_available_openai_models(client=OpenAI()):
 
 def list_available_claude_models(client=Anthropic()):
     """The function listing the available models in Anthropic."""
-
     try:
         models = client.models.list()
         print("\n" + "======== Available Anthropic's Models ========")
@@ -72,7 +70,6 @@ def list_available_claude_models(client=Anthropic()):
 
 def list_available_gemini_models(client=genai.Client()):
     """The function listing the available models in Google Gemini."""
-
     try:
         models = client.models.list()
         print("\n" + "======== Available Google's Models ========")

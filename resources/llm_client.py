@@ -2,30 +2,42 @@
 # Extract the required value from the response object.
 # Returns objects such as LLMCallResult, which contains the LLM response content and metadata such as tokens used, model name, and finish_reason.
 
-import openai  # noqa: I001
+import anthropic  # noqa: I001
+import openai
+from anthropic import Anthropic
+from google import genai
+from google.genai import errors
 from openai import OpenAI
 
-from schemas import LLMCallResult, TokenUsage, CostInfo
-from count_cost import load_price_table, calculate_openai_cost
+from count_cost import calculate_openai_cost, load_price_table
+from schemas import CostInfo, LLMCallResult, TokenUsage
 
-
-# 1) Create an instance of the OpenAI client, which will be used to interact with the OpenAI API.
+# 1) Create an instance of the clients in OpenAI, Anthropic and Goolge, which will be used to interact with the OpenAI, Anthropic and Google API.
 try:
-    client = OpenAI()
+    client_openai = OpenAI()
 except openai.OpenAIError as e:
+    print(e)
+
+try:
+    client_anthropic = Anthropic()
+except anthropic.AnthropicError as e:
+    print(e)
+
+try:
+    client_google = genai.Client()
+except errors.APIError as e:
     print(e)
 
 
 # 2) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
-def ask_gpt(system_prompt: str, user_question: str, selected_model: str = "gpt-4o-mini") -> LLMCallResult:
+def ask_openai(system_prompt: str, user_question: str, selected_model: str = "gpt-4o-mini") -> LLMCallResult:
     """
     Call the OpenAI API to get a response from the specified model based on the provided system prompt and user question.
     Returns an LLMCallResult object containing the response text and metadata.
     """
-
     try:
         # You can adjust the response style of the model by providing detailed parameters.
-        openai_response = client.chat.completions.create(
+        openai_response = client_openai.chat.completions.create(
             model=selected_model,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -88,3 +100,11 @@ def ask_gpt(system_prompt: str, user_question: str, selected_model: str = "gpt-4
     except openai.APIError as e:
         # Handle API error here, e.g. retry or log.
         print(f"OpenAI API returned an API Error: {e}" + "\n")
+
+
+def ask_anthropic(system_prompt: str, user_question: str, selected_model: str = "") -> LLMCallResult:
+    print("temp")
+
+
+def ask_google(system_prompt: str, user_question: str, selected_model: str = "") -> LLMCallResult:
+    print("temp")

@@ -61,7 +61,6 @@ def calculate_openai_cost(
     Calculate the cost of an API call based on the model's pricing and the number of tokens used.
     Handle both normal input tokens and cached input tokens, applying the appropriate rates for each.
     """
-
     price = resolve_model_entry(price_table, model_name)
 
     input_rate = to_decimal(price["input"])
