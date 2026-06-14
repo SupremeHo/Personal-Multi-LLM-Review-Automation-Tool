@@ -68,10 +68,8 @@ def check_environment_variables():
             else:
                 print("\nPlease try to input correctly.\n")
                 continue
-
-        except EOFError as e:
-            print(f"\n{e}. Please try to input correctly\n")
-            continue
+        except EOFError:
+            sys.exit("Read beyond end of file. Exit the program.")
 
 
 def show_key_values_12_chars(required_vars):
@@ -83,5 +81,9 @@ def show_key_values_12_chars(required_vars):
         print(f"\n{env_var}: {key_value_12_chars}")
 
 
-# if __name__ == "__main__":
+# def main():
 #     check_environment_variables()
+
+
+# if __name__ == "__main__":
+#     main()
