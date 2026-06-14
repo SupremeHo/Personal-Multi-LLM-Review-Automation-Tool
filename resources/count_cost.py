@@ -18,7 +18,8 @@ def load_price_table(path: str | Path) -> dict:
             return json.load(f)
 
     except FileNotFoundError:
-        print(f"No such file or directory: {path}")
+        print(f"No such file or directory: {path}\n")
+        return []  # return the empty list.
 
 
 def resolve_model_entry(
@@ -81,7 +82,7 @@ def calculate_openai_cost(
 
     total_cost = input_cost + cached_input_cost + output_cost
 
-    notice_price_tag_update(update_at=price_table.get("updated_at"))
+    notice_price_tag_update(price_table.get("updated_at"))
 
     return {
         "input_usd": float(input_cost),
@@ -94,7 +95,7 @@ def calculate_openai_cost(
     }
 
 
-def notice_price_tag_update(updated_at):
+def notice_price_tag_update(updated_at=str):
     """Notice an alert for renewal if it's been 30 days since the update about price information."""
     today_obj = datetime.datetime.now()
     updated_at_obj = datetime.datetime.strptime(updated_at, "%Y-%m-%d")
@@ -102,18 +103,13 @@ def notice_price_tag_update(updated_at):
     days_delta = today_obj - updated_at_obj
 
     if days_delta.days > 30:
-        print("⚠️ Token unit price information is over 30 days old. Check the price_****.json.")
+        print("\nToken unit price information is over 30 days old. Check the price_****.json.\n")
 
 
 # if __name__ == "__main__":
-#     # Example usage and print result for testing
 #     price_table = load_price_table("resources/config/prices/prices_openai.json")
 #     model_name = "gpt-5.5"
 #     calculation_result = calculate_openai_cost(
-#         price_table = price_table,
-#         model_name = model_name,
-#         input_tokens = 1000,
-#         output_tokens = 2000,
-#         cached_input_tokens = 0
+#         price_table=price_table, model_name=model_name, input_tokens=1000, output_tokens=2000, cached_input_tokens=0
 #     )
 #     print(calculation_result)

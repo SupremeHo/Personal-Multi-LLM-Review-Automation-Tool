@@ -37,13 +37,13 @@ def check_environment_variables():
     if missing_vars_claude:
         sys.stderr.write("Environment Variable Missing: " + ", ".join(missing_vars_claude) + "\n")
         sys.stderr.write(
-            ".env file is missing Claude API's required variables. Please check .env.example for the required variables.\n"
+            ".env file is missing Anthropic API's required variables. Please check .env.example for the required variables.\n"
         )
         sys.exit(1)
     if missing_vars_gemini:
         sys.stderr.write("Environment Variable Missing: " + ", ".join(missing_vars_gemini) + "\n")
         sys.stderr.write(
-            ".env file is missing Gemini API's required variables. Please check .env.example for the required variables.\n"
+            ".env file is missing Google API's required variables. Please check .env.example for the required variables.\n"
         )
         sys.exit(1)
 

@@ -85,7 +85,7 @@ def check_env():
 # Defining the list-models command. This will list available models from the OpenAI API.
 @app.command()
 def list_models():
-    list_available_models(llm_client.client_openai, llm_client.client_google, llm_client.client_anthropic)
+    list_available_models(llm_client.client_openai, llm_client.client_anthropic, llm_client.client_google)
 
 
 # Not yet implemented. This command will show the user's history of questions and LLM responses.
