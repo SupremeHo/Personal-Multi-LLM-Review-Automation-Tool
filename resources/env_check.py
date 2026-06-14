@@ -6,7 +6,7 @@ import sys
 try:
     from dotenv import load_dotenv
 except ModuleNotFoundError:
-    print("Error: 'python-dotenv' package is not installed.")
+    print("Error Message: 'python-dotenv' package is not installed.")
     print("Please run and install 'pipe install python-dotenv' on the terminal.")
 
 
@@ -29,19 +29,19 @@ def check_environment_variables():
 
     # 3) If any required environment variable is missing, print an error message and exit the program.
     if missing_vars_openai:
-        sys.stderr.write("Environment Variable Missing: " + ", ".join(missing_vars_openai) + "\n")
+        sys.stderr.write("Error Message: Environment Variable Missing: " + ", ".join(missing_vars_openai) + "\n")
         sys.stderr.write(
             ".env file is missing OpenAI API's required variables. Please check .env.example for the required variables.\n"
         )
         sys.exit(1)
     if missing_vars_claude:
-        sys.stderr.write("Environment Variable Missing: " + ", ".join(missing_vars_claude) + "\n")
+        sys.stderr.write("Error Message: Environment Variable Missing: " + ", ".join(missing_vars_claude) + "\n")
         sys.stderr.write(
             ".env file is missing Anthropic API's required variables. Please check .env.example for the required variables.\n"
         )
         sys.exit(1)
     if missing_vars_gemini:
-        sys.stderr.write("Environment Variable Missing: " + ", ".join(missing_vars_gemini) + "\n")
+        sys.stderr.write("Error Message: Environment Variable Missing: " + ", ".join(missing_vars_gemini) + "\n")
         sys.stderr.write(
             ".env file is missing Google API's required variables. Please check .env.example for the required variables.\n"
         )
@@ -69,7 +69,7 @@ def check_environment_variables():
                 print("\nPlease try to input correctly.\n")
                 continue
         except EOFError:
-            sys.exit("Read beyond end of file. Exit the program.")
+            sys.exit("Error Message: Read beyond end of file. Exit the program.")
 
 
 def show_key_values_12_chars(required_vars):

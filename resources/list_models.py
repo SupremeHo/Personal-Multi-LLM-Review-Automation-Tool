@@ -38,12 +38,12 @@ def list_available_models(client_openai: OpenAI, client_anthropic: Anthropic, cl
                 print("\nSkipping model listing...\n")
                 break
             else:
-                print("\nError. Please enter your input correctly.")
+                print("\nPlease enter your input correctly.")
                 continue
         except EOFError:
-            sys.exit("Read beyond end of file. Exit the program.")
+            sys.exit("Error Message: Read beyond end of file. Exit the program.")
         except KeyboardInterrupt:
-            sys.exit("Program interrupted by user. Exit the program.")
+            sys.exit("Error Message: Program interrupted by user. Exit the program.")
 
 
 def list_available_openai_models(client):
@@ -56,7 +56,7 @@ def list_available_openai_models(client):
                 print(model.id)
         print("======== Finished listing OpenAI's Models list ========\n")
     except OpenAIError as e:
-        print(f"Failed to list OpenAI's models: {e}")
+        print(f"Error Message: Failed to list OpenAI's models: {e}")
         raise
 
 
@@ -69,7 +69,7 @@ def list_available_claude_models(client):
             print(model.id)
         print("======== Finished listing Anthropic's Models list ========\n")
     except AnthropicError as e:
-        print(f"Failed to list Anthropic's models: {e}")
+        print(f"Error Message: Failed to list Anthropic's models: {e}")
         raise
 
 
@@ -85,20 +85,20 @@ def list_available_gemini_models(client):
                 print(new_text)
         print("======== Finished listing Google's Models list ========\n")
     except errors.APIError as e:
-        print(f"Failed to list Google's models: {e}")
+        print(f"Error Message: Failed to list Google's models: {e}")
         raise
 
 
-def main():
-    client_openai = OpenAI()
-    client_anthropic = Anthropic()
-    client_google = genai.Client()
-    list_available_models(client_openai, client_anthropic, client_google)
+# def main():
+#     client_openai = OpenAI()
+#     client_anthropic = Anthropic()
+#     client_google = genai.Client()
+#     list_available_models(client_openai, client_anthropic, client_google)
 
 
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print(f"Program failed: {e}", file=sys.stderr)
-        sys.exit(1)
+# if __name__ == "__main__":
+#     try:
+#         main()
+#     except Exception as e:
+#         print(f"Program failed: {e}", file=sys.stderr)
+#         sys.exit(1)

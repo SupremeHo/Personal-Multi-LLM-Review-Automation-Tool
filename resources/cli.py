@@ -64,7 +64,7 @@ def ask(system_prompt: str, user_question: str):
             result=None,
         )
 
-        typer.echo(f"An error occurred: {e}")
+        typer.echo(f"Error Message: {e}")
 
     # Attatch the created time after the log's name.
     gpt_response_filename = f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
