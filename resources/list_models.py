@@ -41,10 +41,12 @@ def list_available_models(client_openai: OpenAI, client_anthropic: Anthropic, cl
                 print("\nError. Please enter your input correctly.")
                 continue
         except EOFError:
-            sys.exit("Invalid value input. Exit the program.")
+            sys.exit("Read beyond end of file. Exit the program.")
+        except KeyboardInterrupt:
+            sys.exit("Program interrupted by user. Exit the program.")
 
 
-def list_available_openai_models(client=OpenAI()):
+def list_available_openai_models(client):
     """The function listing the available models in OpenAI."""
     try:
         models = client.models.list()
@@ -58,7 +60,7 @@ def list_available_openai_models(client=OpenAI()):
         raise
 
 
-def list_available_claude_models(client=Anthropic()):
+def list_available_claude_models(client):
     """The function listing the available models in Anthropic."""
     try:
         models = client.models.list()
@@ -71,7 +73,7 @@ def list_available_claude_models(client=Anthropic()):
         raise
 
 
-def list_available_gemini_models(client=genai.Client()):
+def list_available_gemini_models(client):
     """The function listing the available models in Google Gemini."""
     try:
         models = client.models.list()
