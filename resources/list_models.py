@@ -3,9 +3,10 @@
 
 import sys
 
-from anthropic import Anthropic
+from anthropic import Anthropic, AnthropicError
 from google import genai
-from openai import OpenAI
+from google.genai import errors
+from openai import OpenAI, OpenAIError
 
 
 def list_available_models(client_openai: OpenAI, client_anthropic: Anthropic, client_google: genai):
@@ -37,10 +38,10 @@ def list_available_models(client_openai: OpenAI, client_anthropic: Anthropic, cl
                 print("\nSkipping model listing...\n")
                 break
             else:
-                print("\nError. Please enter your input correctly.\n")
+                print("\nError. Please enter your input correctly.")
                 continue
-        except Exception as e:
-            sys.exit(e + "Invalid value input. Exit the program.")
+        except EOFError:
+            sys.exit("Invalid value input. Exit the program.")
 
 
 def list_available_openai_models(client=OpenAI()):
@@ -51,9 +52,10 @@ def list_available_openai_models(client=OpenAI()):
         for model in models:
             if "gpt" in model.id:
                 print(model.id)
-        print("======== End of OpenAI's Models ========\n")
-    except Exception as e:
-        print(e)
+        print("======== Finished listing OpenAI's Models list ========\n")
+    except OpenAIError as e:
+        print(f"Failed to list OpenAI's models: {e}")
+        raise
 
 
 def list_available_claude_models(client=Anthropic()):
@@ -63,9 +65,10 @@ def list_available_claude_models(client=Anthropic()):
         print("\n" + "======== Available Anthropic's Models ========")
         for model in models:
             print(model.id)
-        print("======== End of Anthropic's Models ========\n")
-    except Exception as e:
-        print(e)
+        print("======== Finished listing Anthropic's Models list ========\n")
+    except AnthropicError as e:
+        print(f"Failed to list Anthropic's models: {e}")
+        raise
 
 
 def list_available_gemini_models(client=genai.Client()):
@@ -78,13 +81,22 @@ def list_available_gemini_models(client=genai.Client()):
                 text = model.name
                 new_text = text.strip("models/")
                 print(new_text)
-        print("======== End of Google's Models ========\n")
+        print("======== Finished listing Google's Models list ========\n")
+    except errors.APIError as e:
+        print(f"Failed to list Google's models: {e}")
+        raise
+
+
+def main():
+    client_openai = OpenAI()
+    client_anthropic = Anthropic()
+    client_google = genai.Client()
+    list_available_models(client_openai, client_anthropic, client_google)
+
+
+if __name__ == "__main__":
+    try:
+        main()
     except Exception as e:
-        print(e)
-
-
-# if __name__ == "__main__":
-#     client_openai = OpenAI()
-#     client_anthropic = Anthropic()
-#     client_gemini = genai.Client()
-#     list_available_models(client_openai, client_anthropic, client_gemini)
+        print(f"Program failed: {e}", file=sys.stderr)
+        sys.exit(1)
