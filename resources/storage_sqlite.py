@@ -6,27 +6,39 @@ import sqlite3
 import uuid
 
 
-def load_json(jsonl_path) -> dict:
+def load_jsonl(jsonl_path) -> dict:
     """
     Load the jsonl file about LLM's log and convert it into a dict.
     """
-    with open(jsonl_path, encoding="utf-8") as file:
-        record = json.load(file)
-        return record
+    try:
+        with open(jsonl_path, encoding="utf-8") as file:
+            record = json.load(file)
+            return record
+
+    except FileNotFoundError:
+        print(f"[ERROR] File not found: {jsonl_path}")
+        raise
+    except json.JSONDecodeError as e:
+        print(f"[ERROR] Invalid JSON on line: {e}")
+        raise
 
 
 def insert_log_record(conn: sqlite3.Connection, record: dict) -> None:
     """
     Insert the LLM's log record to the SQLite Database.
     """
-    json_record = json.loads(record)  # Convert dict into python object
+    json_record = json.loads(record)  # Convert dict into Python object.
 
     result = json_record.get("result") or {}
     usage = result.get("usage") or {}
     cost = result.get("cost") or {}
 
-    run_id = json_record["run_id"]
-    created_at = json_record["created_at"]
+    try:
+        run_id = json_record["run_id"]
+        created_at = json_record["created_at"]
+    except KeyError:
+        print("Error Message: Missing required field in record.")
+
     raw_json = json.dumps(json_record, ensure_ascii=False)
 
     response_id = result.get("response_id") or str(uuid.uuid4())
@@ -93,11 +105,15 @@ def import_jsonl_to_sqlite(jsonl_path: str, db_path: str) -> None:
     """
     Import the LLM's log jsonl file to SQLite Database.
     """
-    conn = sqlite3.connect(db_path)
+    try:
+        conn = sqlite3.connect(db_path)
+    except sqlite3.OperationalError:
+        print(f"Error Message: Failed to connect to database '{db_path}'")
+        raise
 
     try:
         conn.execute("PRAGMA foreign_keys = ON;")
-        json_record = load_json(jsonl_path)
+        json_record = load_jsonl(jsonl_path)
 
         with conn:
             record = json.dumps(json_record)
@@ -106,9 +122,13 @@ def import_jsonl_to_sqlite(jsonl_path: str, db_path: str) -> None:
     finally:
         conn.close()
 
-    print("\nStoring model's responses to SQLite DB is now complete.\n")
+    print("Storing model's responses to SQLite DB is now complete.\n")
+
+
+# def main():
+#     import_jsonl_to_sqlite(JSONL_PATH, DB_PATH)
+#     print("Database creation is now complete.")
 
 
 # if __name__ == "__main__":
-#     import_jsonl_to_sqlite(JSONL_PATH, DB_PATH)
-#     print("Database creation is now complete.")
+#     main()

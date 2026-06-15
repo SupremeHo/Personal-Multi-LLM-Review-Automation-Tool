@@ -32,10 +32,10 @@ def append_jsonl(file_path: str, record: BaseModel | dict) -> None:
         raise
 
     # Print a message indicating that the LLM response has been saved, along with the file path.
-    print(f"\nLLM response has been saved to {file_path}\n")
+    print(f"\nLLM response has been saved to <{file_path}>\n")
 
 
-def load_jsonl(file_path: Path):
+def load_jsonl_file(file_path: Path):
     """
     Load the JSONL file in logs' path.
     """
@@ -59,10 +59,10 @@ def save_jsonl():
     print("temp")
 
 
-def main():
-    json_data = load_jsonl("resources/logs/OpenAI/gpt_response_log_20260615_015411.jsonl")
-    print(json_data)
+# def main():
+#     json_data = load_jsonl_file("resources/logs/OpenAI/gpt_response_log_20260615_015411.jsonl")
+#     print(json_data)
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
