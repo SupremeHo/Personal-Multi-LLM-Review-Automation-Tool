@@ -9,7 +9,7 @@ from google import genai
 from google.genai import errors
 from openai import OpenAI
 
-from count_cost import calculate_openai_cost, load_price_table
+from count_cost import calculate_token_cost, load_price_table
 from schemas import CostInfo, LLMCallResult, TokenUsage
 
 # 1) Create an instance of the clients in OpenAI, Anthropic and Goolge, which will be used to interact with the OpenAI, Anthropic and Google API.
@@ -59,7 +59,7 @@ def ask_openai(system_prompt: str, user_question: str, selected_model: str = "gp
         # Calculate the cost of the API call based on the token usage and the model's pricing, and create a CostInfo object.
         price_table_openai = load_price_table("resources/config/prices/prices_openai.json")
 
-        cost_openai = calculate_openai_cost(
+        cost_openai = calculate_token_cost(
             price_table=price_table_openai,
             model_name=openai_response.model,
             input_tokens=openai_usage.prompt_tokens,

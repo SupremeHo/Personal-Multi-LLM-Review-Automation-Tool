@@ -1,9 +1,10 @@
 # Module that calculates the cost of API calls based on the number of tokens used and the model's pricing.
 # Read the API models' list stored in /config/prices/prices_openai.json and calculate the cost.
+from __future__ import annotations
 
 import datetime
 import json
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 
@@ -18,8 +19,13 @@ def load_price_table(path: str | Path) -> dict:
             return json.load(f)
 
     except FileNotFoundError:
-        print(f"No such file or directory: {path}\n")
+        print(f"Error Message: No such file or directory: {path}\n")
         return []  # return the empty list.
+
+    except json.JSONDecodeError as e:
+        print(f"Error Message: {e.msg}")
+        print(f"Error Location (Line: {e.lineno}, Column: {e.colno})")
+        print(f"JSON string in error: {e.doc}")
 
 
 def resolve_model_entry(
@@ -34,25 +40,38 @@ def resolve_model_entry(
     """
     models = price_table.get("models", {})
 
-    if model_name not in models:
-        raise KeyError(f"Price table for model '{model_name}' was not found.")
+    try:
+        price = models[model_name]
+    except KeyError:
+        if model_name not in models:
+            print(f"Error Message: Price table for model '{model_name}' was not found.")
+            raise
 
-    price = models[model_name]
-
-    if "alias_of" in price:
-        return models[price["alias_of"]]
+    try:
+        if "alias_of" in price:
+            return models[price["alias_of"]]
+    except KeyError:
+        print("Error Message: Model that alias_of refers to was not found.")
+        raise
 
     return price
 
 
 def to_decimal(value: int | float | str | None) -> Decimal | None:
+    """
+    solves floating-point errors to perform decimal operations that require high precision, such as financial calculations.
+    """
     if value is None:
         return None
 
-    return Decimal(str(value))
+    try:
+        return Decimal(str(value))
+    except InvalidOperation:
+        print("Error Message: Invalid operation or conversion")
+        return Decimal("0")
 
 
-def calculate_openai_cost(
+def calculate_token_cost(
     price_table: dict,
     model_name: str,
     input_tokens: int,
@@ -63,53 +82,65 @@ def calculate_openai_cost(
     Calculate the cost of an API call based on the model's pricing and the number of tokens used.
     Handle both normal input tokens and cached input tokens, applying the appropriate rates for each.
     """
-    price = resolve_model_entry(price_table, model_name)
+    try:
+        price = resolve_model_entry(price_table, model_name)
 
-    input_rate = to_decimal(price["input"])
-    cached_input_rate = to_decimal(price.get("cached_input"))
-    output_rate = to_decimal(price["output"])
+        input_rate = to_decimal(price["input"])
+        cached_input_rate = to_decimal(price.get("cached_input"))
+        output_rate = to_decimal(price["output"])
 
-    normal_input_tokens = max(input_tokens - cached_input_tokens, 0)
+        normal_input_tokens = max(input_tokens - cached_input_tokens, 0)
 
-    input_cost = Decimal(normal_input_tokens) / Decimal(1_000_000) * input_rate
+        input_cost = Decimal(normal_input_tokens) / Decimal(1_000_000) * input_rate
 
-    cached_input_cost = Decimal("0")
+        cached_input_cost = Decimal("0")
 
-    if cached_input_tokens > 0:
-        cached_input_cost = Decimal(cached_input_tokens) / Decimal(1_000_000) * cached_input_rate
+        if cached_input_tokens > 0:
+            cached_input_cost = Decimal(cached_input_tokens) / Decimal(1_000_000) * cached_input_rate
 
-    output_cost = Decimal(output_tokens) / Decimal(1_000_000) * output_rate
+        output_cost = Decimal(output_tokens) / Decimal(1_000_000) * output_rate
 
-    total_cost = input_cost + cached_input_cost + output_cost
+        total_cost = input_cost + cached_input_cost + output_cost
 
-    notice_price_tag_update(price_table.get("updated_at"))
+        notice_price_tag_update(price_table.get("updated_at"))
 
-    return {
-        "input_usd": float(input_cost),
-        "cached_input_usd": float(cached_input_cost),
-        "output_usd": float(output_cost),
-        "total_usd": float(total_cost),
-        "estimated": True,
-        "pricing_updated_at": price_table.get("updated_at"),
-        "pricing_source": price_table.get("source"),
-    }
+        return {
+            "input_usd": float(input_cost),
+            "cached_input_usd": float(cached_input_cost),
+            "output_usd": float(output_cost),
+            "total_usd": float(total_cost),
+            "estimated": True,
+            "pricing_updated_at": price_table.get("updated_at"),
+            "pricing_source": price_table.get("source"),
+        }
+    except KeyError:
+        print("\nError Message: The price table does not have a key.\n")
+        raise
 
 
-def notice_price_tag_update(updated_at=str):
+def notice_price_tag_update(updated_at: str = ""):
     """Notice an alert for renewal if it's been 30 days since the update about price information."""
-    today_obj = datetime.datetime.now()
-    updated_at_obj = datetime.datetime.strptime(updated_at, "%Y-%m-%d")
+    try:
+        today_obj = datetime.datetime.now()
+        updated_at_obj = datetime.datetime.strptime(updated_at, "%Y-%m-%d")
 
-    days_delta = today_obj - updated_at_obj
+        days_delta = today_obj - updated_at_obj
 
-    if days_delta.days > 30:
-        print("\nToken unit price information is over 30 days old. Check the price_****.json.\n")
+        if days_delta.days > 30:
+            print("\nToken unit price information is over 30 days old. Check the price_****.json.\n")
+    except ValueError as e:
+        print(f"\nError Message: {e}. There is no update date or the date format is different.\n")
+        raise
 
 
-# if __name__ == "__main__":
+# def main():
 #     price_table = load_price_table("resources/config/prices/prices_openai.json")
 #     model_name = "gpt-5.5"
 #     calculation_result = calculate_openai_cost(
 #         price_table=price_table, model_name=model_name, input_tokens=1000, output_tokens=2000, cached_input_tokens=0
 #     )
 #     print(calculation_result)
+
+
+# if __name__ == "__main__":
+#     main()
