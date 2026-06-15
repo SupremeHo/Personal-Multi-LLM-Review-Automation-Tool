@@ -21,16 +21,48 @@ def append_jsonl(file_path: str, record: BaseModel | dict) -> None:
         json_data = record
 
     # Append the JSON string to the file, ensuring that each record is on a new line (JSONL format).
-    with path.open("a", encoding="utf-8") as json_file:
-        json_file.write(json.dumps(json_data, ensure_ascii=False, indent=4) + "\n")
+    try:
+        with path.open("a", encoding="utf-8") as json_file:
+            json_file.write(json.dumps(json_data, ensure_ascii=False, indent=4) + "\n")
+    except PermissionError:
+        print(f"Error Message: Permission denied → cannot write to {file_path}")
+        raise
+    except OSError as e:
+        print(f"Error Message: Failed to write to {file_path}: {e}")
+        raise
 
     # Print a message indicating that the LLM response has been saved, along with the file path.
     print(f"\nLLM response has been saved to {file_path}\n")
+
+
+def load_jsonl(file_path: Path):
+    """
+    Load the JSONL file in logs' path.
+    """
+    path = Path(file_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        with path.open("r", encoding="utf-8") as file:
+            json_data = json.load(file)
+    except FileNotFoundError:
+        print(f"[ERROR] File not found: {file_path}")
+        raise
+    except json.JSONDecodeError as e:
+        print(f"[ERROR] Invalid JSON on line: {e}")
+        raise
+
+    return json_data
 
 
 def save_jsonl():
     print("temp")
 
 
-def load_jsonl():
-    print("temp")
+def main():
+    json_data = load_jsonl("resources/logs/OpenAI/gpt_response_log_20260615_015411.jsonl")
+    print(json_data)
+
+
+if __name__ == "__main__":
+    main()
