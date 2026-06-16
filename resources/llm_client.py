@@ -16,23 +16,27 @@ from schemas import CostInfo, LLMCallResult, TokenUsage
 try:
     client_openai = OpenAI()
 except openai.OpenAIError as e:
-    print(e)
+    print(f"Error Message: {e}. Error while using OpenAI API.")
+    client_openai = None
 
 try:
     client_anthropic = Anthropic()
 except anthropic.AnthropicError as e:
-    print(e)
+    print(f"Error Message: {e}. Error while using Anthropic API.")
+    client_anthropic = None
 
 try:
     client_google = genai.Client()
 except errors.APIError as e:
-    print(e)
+    print(f"Error Message: {e}. Error while using Google API.")
+    client_google = None
 
 
 # 2) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
 def ask_openai(system_prompt: str, user_question: str, selected_model: str = "gpt-4o-mini") -> LLMCallResult:
     """
     Call the OpenAI API to get a response from the specified model based on the provided system prompt and user question.
+
     Returns an LLMCallResult object containing the response text and metadata.
     """
     try:
@@ -45,39 +49,51 @@ def ask_openai(system_prompt: str, user_question: str, selected_model: str = "gp
             ],
         )
 
-        openai_choice = openai_response.choices[0]
-        openai_usage = openai_response.usage
+        try:
+            openai_choice = openai_response.choices[0]
+        except IndexError:
+            print("Error Message: There aren't choices in OpenAI's response.\n")
+            return None
 
         # Extract token usage information from the OpenAI response and create a TokenUsage object.
-        token_usage_openai = TokenUsage(
-            prompt_tokens=openai_usage.prompt_tokens,
-            completion_tokens=openai_usage.completion_tokens,
-            total_tokens=openai_usage.total_tokens,
-            cached_tokens=openai_usage.prompt_tokens_details.cached_tokens if openai_usage.prompt_tokens_details else None,
-        )
+        openai_usage = openai_response.usage
+
+        try:
+            token_usage_openai = TokenUsage(
+                prompt_tokens=openai_usage.prompt_tokens,
+                completion_tokens=openai_usage.completion_tokens,
+                total_tokens=openai_usage.total_tokens,
+                cached_tokens=openai_usage.prompt_tokens_details.cached_tokens if openai_usage.prompt_tokens_details else None,
+            )
+        except AttributeError:
+            print("Error Message: There is no usage info in OpenAI's response.\n")
+            return None
 
         # Calculate the cost of the API call based on the token usage and the model's pricing, and create a CostInfo object.
         price_table_openai = load_price_table("resources/config/prices/prices_openai.json")
 
-        cost_openai = calculate_token_cost(
-            price_table=price_table_openai,
-            model_name=openai_response.model,
-            input_tokens=openai_usage.prompt_tokens,
-            output_tokens=openai_usage.completion_tokens,
-            cached_input_tokens=openai_usage.prompt_tokens_details.cached_tokens
-            if openai_usage.prompt_tokens_details
-            else None,
-        )
-
-        cost_info_openai = CostInfo(
-            input_usd=cost_openai.get("input_usd"),
-            cached_input_usd=cost_openai.get("cached_input_usd"),
-            output_usd=cost_openai.get("output_usd"),
-            total_usd=cost_openai.get("total_usd"),
-            estimated=cost_openai.get("estimated"),
-            pricing_updated_at=cost_openai.get("pricing_updated_at"),
-            pricing_source=cost_openai.get("pricing_source"),
-        )
+        if not price_table_openai:
+            print()
+            cost_info_openai = None
+        else:
+            cost_openai = calculate_token_cost(
+                price_table=price_table_openai,
+                model_name=openai_response.model,
+                input_tokens=openai_usage.prompt_tokens,
+                output_tokens=openai_usage.completion_tokens,
+                cached_input_tokens=openai_usage.prompt_tokens_details.cached_tokens
+                if openai_usage.prompt_tokens_details
+                else None,
+            )
+            cost_info_openai = CostInfo(
+                input_usd=cost_openai.get("input_usd"),
+                cached_input_usd=cost_openai.get("cached_input_usd"),
+                output_usd=cost_openai.get("output_usd"),
+                total_usd=cost_openai.get("total_usd"),
+                estimated=cost_openai.get("estimated"),
+                pricing_updated_at=cost_openai.get("pricing_updated_at"),
+                pricing_source=cost_openai.get("pricing_source"),
+            )
 
         # 3) Extract the relevant information from the OpenAI response and return it as an LLMCallResult object.
         return LLMCallResult(
@@ -91,15 +107,20 @@ def ask_openai(system_prompt: str, user_question: str, selected_model: str = "gp
         )
 
     # 4) Handle exceptions that may occur during the API call.
+    except openai.AuthenticationError as e:
+        print(f"Error Message: API authentication failed, please check the API key - {e}")
+
     except openai.RateLimitError as e:
-        # Handle rate limit error (we recommend using exponential backoff).
-        print(f"OpenAI API request exceeded rate limit: {e}" + "\n")
+        print(f"Error Message: Too many requests, please try again in a moment - {e}\n")
+
     except openai.APIConnectionError as e:
-        # Handle connection error here.
-        print(f"Failed to connect to OpenAI API: {e}" + "\n")
+        print(f"Error Message: Failed to connect to OpenAI API because of network problem - {e}\n")
+
     except openai.APIError as e:
-        # Handle API error here, e.g. retry or log.
-        print(f"OpenAI API returned an API Error: {e}" + "\n")
+        print(f"Error Message: OpenAI API returned an API Error - {e}\n")
+
+    except Exception as e:
+        print(f"Error Message: Unknown error occured - {e}\n")
 
 
 def ask_anthropic(system_prompt: str, user_question: str, selected_model: str = "") -> LLMCallResult:

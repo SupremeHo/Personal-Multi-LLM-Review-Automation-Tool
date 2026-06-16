@@ -20,12 +20,13 @@ def load_price_table(path: str | Path) -> dict:
 
     except FileNotFoundError:
         print(f"Error Message: No such file or directory: {path}\n")
-        return []  # return the empty list.
+        return []
 
     except json.JSONDecodeError as e:
         print(f"Error Message: {e.msg}")
         print(f"Error Location (Line: {e.lineno}, Column: {e.colno})")
-        print(f"JSON string in error: {e.doc}")
+        print(f"JSON string in error: {e.doc}\n")
+        return []
 
 
 def resolve_model_entry(
@@ -44,14 +45,14 @@ def resolve_model_entry(
         price = models[model_name]
     except KeyError:
         if model_name not in models:
-            print(f"Error Message: Price table for model '{model_name}' was not found.")
+            print(f"Error Message: Price table for model '{model_name}' was not found.\n")
             raise
 
     try:
         if "alias_of" in price:
             return models[price["alias_of"]]
     except KeyError:
-        print("Error Message: Model that alias_of refers to was not found.")
+        print("Error Message: Model that alias_of refers to was not found.\n")
         raise
 
     return price
@@ -67,7 +68,7 @@ def to_decimal(value: int | float | str | None) -> Decimal | None:
     try:
         return Decimal(str(value))
     except InvalidOperation:
-        print("Error Message: Invalid operation or conversion")
+        print("Error Message: Invalid operation or conversion.\n")
         return Decimal("0")
 
 
@@ -113,9 +114,9 @@ def calculate_token_cost(
             "pricing_updated_at": price_table.get("updated_at"),
             "pricing_source": price_table.get("source"),
         }
-    except KeyError:
-        print("\nError Message: The price table does not have a key.\n")
-        raise
+    except KeyError as e:
+        print(f"\nError Message: The price table does not have a model's name - {e}\n")
+        return None
 
 
 def notice_price_tag_update(updated_at: str = ""):
@@ -130,7 +131,7 @@ def notice_price_tag_update(updated_at: str = ""):
             print("\nToken unit price information is over 30 days old. Check the price_****.json.\n")
     except ValueError as e:
         print(f"\nError Message: {e}. There is no update date or the date format is different.\n")
-        raise
+        return None
 
 
 # def main():
