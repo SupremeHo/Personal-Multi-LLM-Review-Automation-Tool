@@ -16,19 +16,19 @@ from schemas import CostInfo, LLMCallResult, TokenUsage
 try:
     client_openai = OpenAI()
 except openai.OpenAIError as e:
-    print(f"Error Message: {e}. Error while using OpenAI API.")
+    print(f"[llm_client.py] Error Message: {e}. Error while using OpenAI API.")
     client_openai = None
 
 try:
     client_anthropic = Anthropic()
 except anthropic.AnthropicError as e:
-    print(f"Error Message: {e}. Error while using Anthropic API.")
+    print(f"[llm_client.py] Error Message: {e}. Error while using Anthropic API.")
     client_anthropic = None
 
 try:
     client_google = genai.Client()
 except errors.APIError as e:
-    print(f"Error Message: {e}. Error while using Google API.")
+    print(f"[llm_client.py] Error Message: {e}. Error while using Google API.")
     client_google = None
 
 
@@ -52,7 +52,7 @@ def ask_openai(system_prompt: str, user_question: str, selected_model: str = "gp
         try:
             openai_choice = openai_response.choices[0]
         except IndexError:
-            print("Error Message: There aren't choices in OpenAI's response.\n")
+            print("[llm_client.py] Error Message: There aren't choices in OpenAI's response.\n")
             return None
 
         # Extract token usage information from the OpenAI response and create a TokenUsage object.
@@ -66,7 +66,7 @@ def ask_openai(system_prompt: str, user_question: str, selected_model: str = "gp
                 cached_tokens=openai_usage.prompt_tokens_details.cached_tokens if openai_usage.prompt_tokens_details else None,
             )
         except AttributeError:
-            print("Error Message: There is no usage info in OpenAI's response.\n")
+            print("[llm_client.py] Error Message: There is no usage info in OpenAI's response.\n")
             return None
 
         # Calculate the cost of the API call based on the token usage and the model's pricing, and create a CostInfo object.
@@ -108,19 +108,19 @@ def ask_openai(system_prompt: str, user_question: str, selected_model: str = "gp
 
     # 4) Handle exceptions that may occur during the API call.
     except openai.AuthenticationError as e:
-        print(f"Error Message: API authentication failed, please check the API key - {e}")
+        print(f"[llm_client.py] Error Message: API authentication failed, please check the API key - {e}")
 
     except openai.RateLimitError as e:
-        print(f"Error Message: Too many requests, please try again in a moment - {e}\n")
+        print(f"[llm_client.py] Error Message: Too many requests, please try again in a moment - {e}\n")
 
     except openai.APIConnectionError as e:
-        print(f"Error Message: Failed to connect to OpenAI API because of network problem - {e}\n")
+        print(f"[llm_client.py] Error Message: Failed to connect to OpenAI API because of network problem - {e}\n")
 
     except openai.APIError as e:
-        print(f"Error Message: OpenAI API returned an API Error - {e}\n")
+        print(f"[llm_client.py] Error Message: OpenAI API returned an API Error - {e}\n")
 
     except Exception as e:
-        print(f"Error Message: Unknown error occured - {e}\n")
+        print(f"[llm_client.py] Error Message: Unknown error occured - {e}\n")
 
 
 def ask_anthropic(system_prompt: str, user_question: str, selected_model: str = "") -> LLMCallResult:

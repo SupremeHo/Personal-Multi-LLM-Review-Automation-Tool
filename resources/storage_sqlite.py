@@ -16,10 +16,10 @@ def load_jsonl(jsonl_path) -> dict:
             return record
 
     except FileNotFoundError:
-        print(f"[ERROR] File not found: {jsonl_path}")
+        print(f"[storage_sqlite.py] Error Message: File not found - {jsonl_path}")
         raise
     except json.JSONDecodeError as e:
-        print(f"[ERROR] Invalid JSON on line: {e}")
+        print(f"[storage_sqlite.py] Error Message: Invalid JSON on line - {e}")
         raise
 
 
@@ -37,7 +37,7 @@ def insert_log_record(conn: sqlite3.Connection, record: dict) -> None:
         run_id = json_record["run_id"]
         created_at = json_record["created_at"]
     except KeyError:
-        print("Error Message: Missing required field in record.")
+        print("[storage_sqlite.py] Error Message: Missing required field in record.")
 
     raw_json = json.dumps(json_record, ensure_ascii=False)
 
@@ -108,7 +108,7 @@ def import_jsonl_to_sqlite(jsonl_path: str, db_path: str) -> None:
     try:
         conn = sqlite3.connect(db_path)
     except sqlite3.OperationalError:
-        print(f"Error Message: Failed to connect to database '{db_path}'")
+        print(f"[storage_sqlite.py] Error Message: Failed to connect to database '{db_path}'")
         raise
 
     try:
