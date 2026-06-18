@@ -3,7 +3,6 @@
 
 import json
 import sqlite3
-import uuid
 
 
 def load_jsonl(jsonl_path) -> dict:
@@ -44,8 +43,6 @@ def insert_log_record(conn: sqlite3.Connection, record: dict) -> None:
 
     raw_json = json.dumps(json_record, ensure_ascii=False)
 
-    response_id = result.get("response_id") or str(uuid.uuid4())
-
     conn.execute(
         """
         INSERT OR IGNORE INTO runs (
@@ -79,7 +76,7 @@ def insert_log_record(conn: sqlite3.Connection, record: dict) -> None:
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            response_id,
+            result.get("response_id"),
             run_id,
             result.get("provider"),
             result.get("model"),

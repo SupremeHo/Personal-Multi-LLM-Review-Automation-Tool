@@ -16,7 +16,7 @@ from storage_json import append_jsonl
 from storage_sqlite import import_jsonl_to_sqlite
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "db" / "sqlite.db"
+DB_PATH = BASE_DIR / "db" / "llm_responses.db"
 
 app = typer.Typer()
 
@@ -25,13 +25,17 @@ app = typer.Typer()
 @app.command()
 def ask(system_prompt: str, user_question: str):
     run_id = str(uuid4())  # Create a unique non-overlapping unique ID.
+    response_id = str(uuid4())  # Create a UUID for identification of individual LLM response units.
     created_at = datetime.now()
     start_time = time.time()  # Measure the time which API call starts.
 
     try:
-        result = ask_openai(system_prompt, user_question)
+        result = ask_openai(system_prompt, user_question, response_id)
 
         end_time = time.time()  # Measure the time which API call ends.
+
+        typer.echo("\n==== OpenAI GPT's Response ====\n")
+        typer.echo(f"{result.response_text}\n")
 
         log = LLMCallLog(
             run_id=run_id,
@@ -46,21 +50,7 @@ def ask(system_prompt: str, user_question: str):
             result=result,
         )
 
-        typer.echo("\n==== OpenAI GPT's Response ====\n")
-        typer.echo(f"{result.response_text}\n")
-
-        # Attatch the created time after the log's name.
-        gpt_response_filename = f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
-
-        # Save the log as .jsonl file in specified path.
-        jsonl_path = f"resources/logs/OpenAI/{gpt_response_filename}"
-        append_jsonl(jsonl_path, log)
-
-        import_jsonl_to_sqlite(jsonl_path, DB_PATH)
-
     except Exception as e:
-        end_time = time.time()  # Measure the time which API call ends.
-
         log = LLMCallLog(
             run_id=run_id,
             created_at=created_at,
@@ -71,19 +61,18 @@ def ask(system_prompt: str, user_question: str):
             elapsed_sec=round(
                 (end_time - start_time), 3
             ),  # Calculate the elapsed time (seconds) and round the value to third decimal place.
-            result=None,
+            result=result,
         )
 
         typer.echo(f"[cli.py] Error Message: {e}")
 
-        # Attatch the created time after the log's name.
-        gpt_response_filename = f"gpt_response_error_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
+    # Attatch the created time after the log's name.
+    gpt_response_filename = f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
 
-        # Save the log as .jsonl file in specified path.
-        jsonl_path = f"resources/logs/OpenAI/{gpt_response_filename}"
-        append_jsonl(jsonl_path, log)
-
-        import_jsonl_to_sqlite(jsonl_path, DB_PATH)
+    # Save the log as .jsonl file in specified path.
+    jsonl_path = f"resources/logs/OpenAI/{gpt_response_filename}"
+    append_jsonl(jsonl_path, log)
+    import_jsonl_to_sqlite(jsonl_path, DB_PATH)
 
 
 # Load environment variables from .env file with the checking function defined in env_check.py.

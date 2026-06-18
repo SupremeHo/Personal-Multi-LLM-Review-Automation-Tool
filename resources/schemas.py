@@ -32,6 +32,7 @@ class LLMCallResult(BaseModel):
 
     model_config = ConfigDict(extra="forbid")  # Forbid extra fields to ensure strict adherence to the defined schema.
 
+    response_id: str
     provider: str
     model: str
     response_text: str
