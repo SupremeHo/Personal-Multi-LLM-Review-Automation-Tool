@@ -49,6 +49,15 @@ def ask(system_prompt: str, user_question: str):
         typer.echo("\n==== OpenAI GPT's Response ====\n")
         typer.echo(f"{result.response_text}\n")
 
+        # Attatch the created time after the log's name.
+        gpt_response_filename = f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
+
+        # Save the log as .jsonl file in specified path.
+        jsonl_path = f"resources/logs/OpenAI/{gpt_response_filename}"
+        append_jsonl(jsonl_path, log)
+
+        import_jsonl_to_sqlite(jsonl_path, DB_PATH)
+
     except Exception as e:
         end_time = time.time()  # Measure the time which API call ends.
 
@@ -67,14 +76,14 @@ def ask(system_prompt: str, user_question: str):
 
         typer.echo(f"[cli.py] Error Message: {e}")
 
-    # Attatch the created time after the log's name.
-    gpt_response_filename = f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
+        # Attatch the created time after the log's name.
+        gpt_response_filename = f"gpt_response_error_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
 
-    # Save the log as .jsonl file in specified path.
-    jsonl_path = f"resources/logs/OpenAI/{gpt_response_filename}"
-    append_jsonl(jsonl_path, log)
+        # Save the log as .jsonl file in specified path.
+        jsonl_path = f"resources/logs/OpenAI/{gpt_response_filename}"
+        append_jsonl(jsonl_path, log)
 
-    import_jsonl_to_sqlite(jsonl_path, DB_PATH)
+        import_jsonl_to_sqlite(jsonl_path, DB_PATH)
 
 
 # Load environment variables from .env file with the checking function defined in env_check.py.
