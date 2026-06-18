@@ -25,10 +25,10 @@ def append_jsonl(file_path: str, record: BaseModel | dict) -> None:
         with path.open("a", encoding="utf-8") as json_file:
             json_file.write(json.dumps(json_data, ensure_ascii=False, indent=4) + "\n")
     except PermissionError:
-        print(f"[count_cost.py] Error Message: Permission denied → cannot write to {file_path}")
+        print(f"[storage_json.py] Error Message: Permission denied → cannot write to {file_path}")
         raise
     except OSError as e:
-        print(f"[count_cost.py] Error Message: Failed to write to {file_path}: {e}")
+        print(f"[storage_json.py] Error Message: Failed to write to {file_path}: {e}")
         raise
 
     # Print a message indicating that the LLM response has been saved, along with the file path.
