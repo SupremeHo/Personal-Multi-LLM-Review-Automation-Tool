@@ -39,88 +39,71 @@ def ask_openai(system_prompt: str, user_question: str, selected_model: str = "gp
 
     Returns an LLMCallResult object containing the response text and metadata.
     """
+    # You can adjust the response style of the model by providing detailed parameters.
+    openai_response = client_openai.chat.completions.create(
+        model=selected_model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_question},
+        ],
+    )
+
     try:
-        # You can adjust the response style of the model by providing detailed parameters.
-        openai_response = client_openai.chat.completions.create(
-            model=selected_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_question},
-            ],
+        openai_choice = openai_response.choices[0]
+    except IndexError:
+        print("[llm_client.py] Error Message: There aren't choices in OpenAI's response.\n")
+        raise
+
+    # Extract token usage information from the OpenAI response and create a TokenUsage object.
+    openai_usage = openai_response.usage
+
+    try:
+        token_usage_openai = TokenUsage(
+            prompt_tokens=openai_usage.prompt_tokens,
+            completion_tokens=openai_usage.completion_tokens,
+            total_tokens=openai_usage.total_tokens,
+            cached_tokens=openai_usage.prompt_tokens_details.cached_tokens if openai_usage.prompt_tokens_details else None,
+        )
+    except AttributeError:
+        print("[llm_client.py] Error Message: There is no usage info in OpenAI's response.\n")
+        raise
+
+    # Calculate the cost of the API call based on the token usage and the model's pricing, and create a CostInfo object.
+    price_table_openai = load_price_table("resources/config/prices/prices_openai.json")
+
+    if not price_table_openai:
+        print()
+        cost_info_openai = None
+    else:
+        cost_openai = calculate_token_cost(
+            price_table=price_table_openai,
+            model_name=openai_response.model,
+            input_tokens=openai_usage.prompt_tokens,
+            output_tokens=openai_usage.completion_tokens,
+            cached_input_tokens=openai_usage.prompt_tokens_details.cached_tokens
+            if openai_usage.prompt_tokens_details
+            else None,
+        )
+        cost_info_openai = CostInfo(
+            input_usd=cost_openai.get("input_usd"),
+            cached_input_usd=cost_openai.get("cached_input_usd"),
+            output_usd=cost_openai.get("output_usd"),
+            total_usd=cost_openai.get("total_usd"),
+            estimated=cost_openai.get("estimated"),
+            pricing_updated_at=cost_openai.get("pricing_updated_at"),
+            pricing_source=cost_openai.get("pricing_source"),
         )
 
-        try:
-            openai_choice = openai_response.choices[0]
-        except IndexError:
-            print("[llm_client.py] Error Message: There aren't choices in OpenAI's response.\n")
-            return None
-
-        # Extract token usage information from the OpenAI response and create a TokenUsage object.
-        openai_usage = openai_response.usage
-
-        try:
-            token_usage_openai = TokenUsage(
-                prompt_tokens=openai_usage.prompt_tokens,
-                completion_tokens=openai_usage.completion_tokens,
-                total_tokens=openai_usage.total_tokens,
-                cached_tokens=openai_usage.prompt_tokens_details.cached_tokens if openai_usage.prompt_tokens_details else None,
-            )
-        except AttributeError:
-            print("[llm_client.py] Error Message: There is no usage info in OpenAI's response.\n")
-            return None
-
-        # Calculate the cost of the API call based on the token usage and the model's pricing, and create a CostInfo object.
-        price_table_openai = load_price_table("resources/config/prices/prices_openai.json")
-
-        if not price_table_openai:
-            print()
-            cost_info_openai = None
-        else:
-            cost_openai = calculate_token_cost(
-                price_table=price_table_openai,
-                model_name=openai_response.model,
-                input_tokens=openai_usage.prompt_tokens,
-                output_tokens=openai_usage.completion_tokens,
-                cached_input_tokens=openai_usage.prompt_tokens_details.cached_tokens
-                if openai_usage.prompt_tokens_details
-                else None,
-            )
-            cost_info_openai = CostInfo(
-                input_usd=cost_openai.get("input_usd"),
-                cached_input_usd=cost_openai.get("cached_input_usd"),
-                output_usd=cost_openai.get("output_usd"),
-                total_usd=cost_openai.get("total_usd"),
-                estimated=cost_openai.get("estimated"),
-                pricing_updated_at=cost_openai.get("pricing_updated_at"),
-                pricing_source=cost_openai.get("pricing_source"),
-            )
-
-        # 3) Extract the relevant information from the OpenAI response and return it as an LLMCallResult object.
-        return LLMCallResult(
-            provider="OpenAI",
-            model=openai_response.model,
-            response_text=openai_choice.message.content,
-            finish_reason=openai_choice.finish_reason,
-            raw_response_id=getattr(openai_response, "id", None),
-            usage=token_usage_openai,
-            cost=cost_info_openai,
-        )
-
-    # 4) Handle exceptions that may occur during the API call.
-    except openai.AuthenticationError as e:
-        print(f"[llm_client.py] Error Message: API authentication failed, please check the API key - {e}")
-
-    except openai.RateLimitError as e:
-        print(f"[llm_client.py] Error Message: Too many requests, please try again in a moment - {e}\n")
-
-    except openai.APIConnectionError as e:
-        print(f"[llm_client.py] Error Message: Failed to connect to OpenAI API because of network problem - {e}\n")
-
-    except openai.APIError as e:
-        print(f"[llm_client.py] Error Message: OpenAI API returned an API Error - {e}\n")
-
-    except Exception as e:
-        print(f"[llm_client.py] Error Message: Unknown error occured - {e}\n")
+    # 3) Extract the relevant information from the OpenAI response and return it as an LLMCallResult object.
+    return LLMCallResult(
+        provider="OpenAI",
+        model=openai_response.model,
+        response_text=openai_choice.message.content,
+        finish_reason=openai_choice.finish_reason,
+        raw_response_id=getattr(openai_response, "id", None),
+        usage=token_usage_openai,
+        cost=cost_info_openai,
+    )
 
 
 def ask_anthropic(system_prompt: str, user_question: str, selected_model: str = "") -> LLMCallResult:
