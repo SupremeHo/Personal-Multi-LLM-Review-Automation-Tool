@@ -55,6 +55,7 @@ def ask(system_prompt: str, user_question: str):
         log = LLMCallLog(
             run_id=run_id,
             created_at=created_at,
+            system_prompt=system_prompt,
             user_prompt=user_question,
             success=False,
             error=str(e),
@@ -64,7 +65,7 @@ def ask(system_prompt: str, user_question: str):
             result=None,
         )
 
-        typer.echo(f"Error Message: {e}")
+        typer.echo(f"[cli.py] Error Message: {e}")
 
     # Attatch the created time after the log's name.
     gpt_response_filename = f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
