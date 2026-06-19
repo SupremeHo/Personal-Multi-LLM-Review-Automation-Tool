@@ -29,11 +29,11 @@ def ask(system_prompt: str, user_question: str):
     created_at = datetime.now()  # The time when the LLMs' responses were made.
 
     start_time = time.time()  # Measure the time which API call starts.
-    result = ask_openai(system_prompt, user_question, response_id)
+    result_openai = ask_openai(system_prompt, user_question, response_id)
     end_time = time.time()  # Measure the time which API call ends.
 
     typer.echo("\n==== OpenAI GPT's Response ====\n")
-    typer.echo(f"{result.response_text}\n")
+    typer.echo(f"{result_openai.response_text}\n")
 
     try:
         log = LLMCallLog(
@@ -46,7 +46,7 @@ def ask(system_prompt: str, user_question: str):
             elapsed_sec=round(
                 (end_time - start_time), 3
             ),  # Calculate the elapsed time (seconds) and round the value to third decimal place.
-            result=result,
+            result=result_openai,
         )
 
     except Exception as e:
@@ -60,7 +60,7 @@ def ask(system_prompt: str, user_question: str):
             elapsed_sec=round(
                 (end_time - start_time), 3
             ),  # Calculate the elapsed time (seconds) and round the value to third decimal place.
-            result=result,
+            result=result_openai,
         )
 
         typer.echo(f"[cli.py] Error Message: {e}")
@@ -68,10 +68,12 @@ def ask(system_prompt: str, user_question: str):
     # Attatch the created time after the log's name.
     gpt_response_filename = f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
 
-    # Save the log as .jsonl file in specified path.
-    jsonl_path = f"resources/logs/OpenAI/{gpt_response_filename}"
-    append_jsonl(jsonl_path, log)
-    import_jsonl_to_sqlite(jsonl_path, DB_PATH)
+    # Specify a location to save the log as .jsonl file.
+    jsonl_path_openai = f"resources/logs/OpenAI/{gpt_response_filename}"
+
+    # Save the .jsonl file and store the log in SQLite DB.
+    append_jsonl(jsonl_path_openai, log)
+    import_jsonl_to_sqlite(jsonl_path_openai, DB_PATH)
 
 
 # Load environment variables from .env file with the checking function defined in env_check.py.

@@ -39,7 +39,7 @@ class LLMCallResult(BaseModel):
     finish_reason: str | None = None
     raw_response_id: str | None = None
     usage: TokenUsage
-    cost: CostInfo
+    cost: CostInfo | None = None
 
 
 class LLMCallLog(BaseModel):
