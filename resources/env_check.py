@@ -7,7 +7,8 @@ try:
     from dotenv import load_dotenv
 except ModuleNotFoundError:
     print("Error Message: 'python-dotenv' package is not installed.")
-    print("Please run and install 'pipe install python-dotenv' on the terminal.")
+    print("Please run and install 'pip install python-dotenv' on the terminal.")
+    sys.exit(1)
 
 
 def check_environment_variables():
@@ -27,28 +28,27 @@ def check_environment_variables():
     missing_vars_claude = [env_var for env_var in REQUIRED_VARS_CLAUDE if not os.getenv(env_var)]
     missing_vars_gemini = [env_var for env_var in REQUIRED_VARS_GEMINI if not os.getenv(env_var)]
 
-    # 3) If any required environment variable is missing, print an error message and exit the program.
+    # 3) Providers are optional (see llm_client.py, which sets a client to None instead of
+    # failing when its key is missing), so warn about missing keys instead of exiting.
     if missing_vars_openai:
-        sys.stderr.write("Error Message: Environment Variable Missing: " + ", ".join(missing_vars_openai) + "\n")
+        sys.stderr.write("Warning: Environment Variable Missing: " + ", ".join(missing_vars_openai) + "\n")
         sys.stderr.write(
             ".env file is missing OpenAI API's required variables. Please check .env.example for the required variables.\n"
         )
-        sys.exit(1)
     if missing_vars_claude:
-        sys.stderr.write("Error Message: Environment Variable Missing: " + ", ".join(missing_vars_claude) + "\n")
+        sys.stderr.write("Warning: Environment Variable Missing: " + ", ".join(missing_vars_claude) + "\n")
         sys.stderr.write(
             ".env file is missing Anthropic API's required variables. Please check .env.example for the required variables.\n"
         )
-        sys.exit(1)
     if missing_vars_gemini:
-        sys.stderr.write("Error Message: Environment Variable Missing: " + ", ".join(missing_vars_gemini) + "\n")
+        sys.stderr.write("Warning: Environment Variable Missing: " + ", ".join(missing_vars_gemini) + "\n")
         sys.stderr.write(
             ".env file is missing Google API's required variables. Please check .env.example for the required variables.\n"
         )
-        sys.exit(1)
 
     # 4) If all required environment variables are set, print a confirmation message.
-    print("All environment variables are set.\n")
+    if not (missing_vars_openai or missing_vars_claude or missing_vars_gemini):
+        print("All environment variables are set.\n")
 
     # 5) Optionally, show the first 12 characters of APIs' required environment variables for verification (avoid printing the entire key for security reasons).
     while True:
@@ -77,7 +77,8 @@ def show_key_values_12_chars(required_vars):
     Show the first 12 characters of each required environment variable.
     """
     for env_var in required_vars:
-        key_value_12_chars = os.getenv(env_var)[:12]
+        key_value = os.getenv(env_var)
+        key_value_12_chars = key_value[:12] if key_value else "(not set)"
         print(f"\n{env_var}: {key_value_12_chars}")
 
 
