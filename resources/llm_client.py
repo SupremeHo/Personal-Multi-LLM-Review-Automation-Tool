@@ -76,32 +76,18 @@ def ask_openai(system_prompt: str, user_question: str, response_id: str, selecte
         model_name=openai_response.model,
         input_tokens=openai_usage.prompt_tokens,
         output_tokens=openai_usage.completion_tokens,
-        cached_input_tokens=openai_usage.prompt_tokens_details.cached_tokens if openai_usage.prompt_tokens_details else None,
+        cached_input_tokens=openai_usage.prompt_tokens_details.cached_tokens if openai_usage.prompt_tokens_details else 0,
     )
 
-    try:
-        cost_info_openai = CostInfo(
-            input_usd=cost_openai.get("input_usd"),
-            cached_input_usd=cost_openai.get("cached_input_usd"),
-            output_usd=cost_openai.get("output_usd"),
-            total_usd=cost_openai.get("total_usd"),
-            estimated=cost_openai.get("estimated"),
-            pricing_updated_at=cost_openai.get("pricing_updated_at"),
-            pricing_source=cost_openai.get("pricing_source"),
-        )
-
-    except Exception:
-        print("[llm_client.py] Error Message: There is no usage info in OpenAI's response.\n")
-
-        cost_info_openai = CostInfo(
-            input_usd=cost_openai.get("input_usd"),
-            cached_input_usd=cost_openai.get("cached_input_usd"),
-            output_usd=cost_openai.get("output_usd"),
-            total_usd=cost_openai.get("total_usd"),
-            estimated=cost_openai.get("estimated"),
-            pricing_updated_at=cost_openai.get("pricing_updated_at"),
-            pricing_source=cost_openai.get("pricing_source"),
-        )
+    cost_info_openai = CostInfo(
+        input_usd=cost_openai.get("input_usd"),
+        cached_input_usd=cost_openai.get("cached_input_usd"),
+        output_usd=cost_openai.get("output_usd"),
+        total_usd=cost_openai.get("total_usd"),
+        estimated=cost_openai.get("estimated"),
+        pricing_updated_at=cost_openai.get("pricing_updated_at"),
+        pricing_source=cost_openai.get("pricing_source"),
+    )
 
     # 3) Extract the relevant information from the OpenAI response and return it as an LLMCallResult object.
     return LLMCallResult(
@@ -117,8 +103,8 @@ def ask_openai(system_prompt: str, user_question: str, response_id: str, selecte
 
 
 def ask_anthropic(system_prompt: str, user_question: str, selected_model: str = "") -> LLMCallResult:
-    print("temp")
+    raise NotImplementedError("Anthropic integration not yet implemented")
 
 
 def ask_google(system_prompt: str, user_question: str, selected_model: str = "") -> LLMCallResult:
-    print("temp")
+    raise NotImplementedError("Google Gemini integration not yet implemented")
