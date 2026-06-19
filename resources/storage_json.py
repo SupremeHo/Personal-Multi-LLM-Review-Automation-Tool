@@ -46,7 +46,7 @@ def load_jsonl_file(file_path: Path):
 
     try:
         with path.open("r", encoding="utf-8") as file:
-            json_data = json.load(file)
+            json_data = [json.loads(line) for line in file if line.strip()]
 
     except FileNotFoundError:
         print(f"[storage_json.py] Error Message: File not found - {file_path}")
@@ -64,7 +64,7 @@ def save_jsonl():
 
 
 # def main():
-#     json_data = load_jsonl_file("resources/logs/OpenAI/gpt_response_log_20260618_161842.jsonl")
+#     json_data = load_jsonl_file("resources/logs/OpenAI/gpt_response_log_20260618_175035.jsonl")
 #     print(json_data)
 
 
