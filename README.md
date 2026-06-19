@@ -12,12 +12,12 @@
 ## Commands currently available
 
 - ask: Prompt the user for a question and output the question.
-  - python -m resources.cli ask "system_prompt" "user_prompt"
+  - `python cli.py ask "system_prompt" "user_prompt"`
   - system_prompt: A top-level guideline and basic setting that pre-defined 'who are you', 'how to act', and 'what not to do' for LLM models.
   - user_prompt: Specific instructions, questions, or requests that users enter to LLM models to get the desired results.
 
 - check-env: Check environment variables from .env file.
-  - python -m resources.cli check-env
+  - `python cli.py check-env`
 
 - list-models: This will list available models from the OpenAI API.
-  - python -m resources.cli list-models
+  - `python cli.py list-models`
