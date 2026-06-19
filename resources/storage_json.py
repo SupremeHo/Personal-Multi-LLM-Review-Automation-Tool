@@ -23,10 +23,12 @@ def append_jsonl(file_path: str, record: BaseModel | dict) -> None:
     # Append the JSON string to the file, ensuring that each record is on a new line (JSONL format).
     try:
         with path.open("a", encoding="utf-8") as json_file:
-            json_file.write(json.dumps(json_data, ensure_ascii=False, indent=4) + "\n")
+            json_file.write(json.dumps(json_data, ensure_ascii=False) + "\n")
+
     except PermissionError:
         print(f"[storage_json.py] Error Message: Permission denied → cannot write to {file_path}")
         raise
+
     except OSError as e:
         print(f"[storage_json.py] Error Message: Failed to write to {file_path}: {e}")
         raise
@@ -45,9 +47,11 @@ def load_jsonl_file(file_path: Path):
     try:
         with path.open("r", encoding="utf-8") as file:
             json_data = json.load(file)
+
     except FileNotFoundError:
         print(f"[storage_json.py] Error Message: File not found - {file_path}")
         raise
+
     except json.JSONDecodeError as e:
         print(f"[storage_json.py] Error Message: Invalid JSON on line - {e}")
         raise
@@ -60,7 +64,7 @@ def save_jsonl():
 
 
 # def main():
-#     json_data = load_jsonl_file("resources/logs/OpenAI/gpt_response_log_20260615_015411.jsonl")
+#     json_data = load_jsonl_file("resources/logs/OpenAI/gpt_response_log_20260618_161842.jsonl")
 #     print(json_data)
 
 
