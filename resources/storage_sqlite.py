@@ -4,30 +4,13 @@
 import json
 import sqlite3
 
-
-def load_jsonl(jsonl_path) -> dict:
-    """
-    Load the jsonl file about LLM's log and convert it into a dict.
-    """
-    try:
-        with open(jsonl_path, encoding="utf-8") as file:
-            record = json.load(file)
-            return record
-
-    except FileNotFoundError:
-        print(f"[storage_sqlite.py][def load_jsonl] Error Message: File not found - {jsonl_path}")
-        raise
-
-    except json.JSONDecodeError as e:
-        print(f"[storage_sqlite.py][def load_jsonl] Error Message: Invalid JSON on line - {e}")
-        raise
+from storage_json import load_jsonl_file
 
 
-def insert_log_record(conn: sqlite3.Connection, record: dict) -> None:
+def insert_log_record(conn: sqlite3.Connection, json_record: dict) -> None:
     """
     Insert the LLM's log record to the SQLite Database.
     """
-    json_record = json.loads(record)  # Convert dict into Python object.
 
     result = json_record.get("result") or {}
     usage = result.get("usage") or {}
@@ -114,11 +97,11 @@ def import_jsonl_to_sqlite(jsonl_path: str, db_path: str) -> None:
 
     try:
         conn.execute("PRAGMA foreign_keys = ON;")
-        json_record = load_jsonl(jsonl_path)
+        json_records = load_jsonl_file(jsonl_path)
 
         with conn:
-            record = json.dumps(json_record)
-            insert_log_record(conn, record)
+            for json_record in json_records:
+                insert_log_record(conn, json_record)
 
     finally:
         conn.close()
