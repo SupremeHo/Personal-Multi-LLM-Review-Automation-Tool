@@ -94,7 +94,7 @@ def calculate_token_cost(
 
     cached_input_cost = Decimal("0")
 
-    if cached_input_tokens > 0:
+    if cached_input_tokens > 0 and cached_input_rate is not None:
         cached_input_cost = Decimal(cached_input_tokens) / Decimal(1_000_000) * cached_input_rate
 
     output_cost = Decimal(output_tokens) / Decimal(1_000_000) * output_rate
