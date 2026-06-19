@@ -20,13 +20,13 @@ def load_price_table(path: str | Path) -> dict:
 
     except FileNotFoundError:
         print(f"[count_cost.py][def load_price_table] Error Message: No such file or directory: {path}\n")
-        return {}
+        raise
 
     except json.JSONDecodeError as e:
         print(f"[count_cost.py][def load_price_table] Error Message: {e.msg}")
         print(f"Error Location (Line: {e.lineno}, Column: {e.colno})")
         print(f"JSON string in error: {e.doc}\n")
-        return {}
+        raise
 
 
 def resolve_model_entry(

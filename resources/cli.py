@@ -26,12 +26,10 @@ app = typer.Typer()
 def ask(system_prompt: str, user_question: str):
     run_id = str(uuid4())  # Create a unique non-overlapping unique ID.
     response_id = str(uuid4())  # Create a UUID for identification of individual LLM response units.
-    created_at = datetime.now()
+    created_at = datetime.now()  # The time when the LLMs' responses were made.
 
     start_time = time.time()  # Measure the time which API call starts.
-
     result = ask_openai(system_prompt, user_question, response_id)
-
     end_time = time.time()  # Measure the time which API call ends.
 
     typer.echo("\n==== OpenAI GPT's Response ====\n")
