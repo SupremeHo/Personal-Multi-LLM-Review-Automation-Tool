@@ -53,9 +53,11 @@ class LLMCallLog(BaseModel):
 
     run_id: str
     created_at: datetime
+    provider: str | None = None  # Which provider was attempted (kept even when the call fails and result is None).
     system_prompt: str
     user_prompt: str
     success: bool
     error: str | None = None
-    elapsed_sec: float | None = None
+    error_type: str | None = None  # Exception class name, so failed calls stay queryable without parsing the message.
+    elapsed_sec: float | None = None  # Latency in seconds, recorded for both successful and failed attempts.
     result: LLMCallResult | None = None

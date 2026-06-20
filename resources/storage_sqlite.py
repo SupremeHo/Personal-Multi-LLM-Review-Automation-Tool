@@ -7,6 +7,20 @@ import sqlite3
 from storage_json import load_jsonl_file
 
 
+def ensure_audit_columns(conn: sqlite3.Connection) -> None:
+    """
+    Add audit columns to the "runs" table if an older database predates them. Idempotent: safe to call every time.
+    Keeps failed-call metadata (provider, error_type) queryable without recreating the database.
+    """
+    existing_columns = {row[1] for row in conn.execute("PRAGMA table_info(runs)")}
+
+    if "provider" not in existing_columns:
+        conn.execute("ALTER TABLE runs ADD COLUMN provider TEXT")
+
+    if "error_type" not in existing_columns:
+        conn.execute("ALTER TABLE runs ADD COLUMN error_type TEXT")
+
+
 def insert_log_record(conn: sqlite3.Connection, json_record: dict) -> None:
     """
     Insert the LLM's log record to the SQLite Database.
@@ -19,31 +33,39 @@ def insert_log_record(conn: sqlite3.Connection, json_record: dict) -> None:
     try:
         run_id = json_record["run_id"]
         created_at = json_record["created_at"]
-
     except KeyError:
         print("[storage_sqlite.py][def insert_log_record] Error Message: Missing required field in record.")
         raise
 
     raw_json = json.dumps(json_record, ensure_ascii=False)
 
+    # Save the executed results to table "run", but ignore run_id if it already exists, and convert success and error values into a form that is easy to store in SQLite.
     conn.execute(
         """
         INSERT OR IGNORE INTO runs (
-            run_id, created_at, system_prompt, user_prompt, success, error, elapsed_sec, raw_json
+            run_id, created_at, provider, system_prompt, user_prompt,
+            success, error, error_type, elapsed_sec, raw_json
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             run_id,
             created_at,
+            json_record.get("provider"),
             json_record.get("system_prompt", ""),
             json_record.get("user_prompt", ""),
             int(bool(json_record.get("success", False))),
             json.dumps(json_record.get("error"), ensure_ascii=False) if json_record.get("error") is not None else None,
+            json_record.get("error_type"),
             json_record.get("elapsed_sec"),
             raw_json,
         ),
-    )  # Save the executed results to table "run", but ignore run_id if it already exists, and convert success and error values into a form that is easy to store in SQLite.
+    )
+
+    # A failed call has no result, so there is no model response to store. Skip the insert to avoid a NOT NULL
+    # violation on model/response_id, while the run (with its error metadata) above is still preserved.
+    if not (result.get("response_id") and result.get("model")):
+        return
 
     conn.execute(
         """
@@ -100,6 +122,7 @@ def import_jsonl_to_sqlite(jsonl_path: str, db_path: str) -> None:
         json_records = load_jsonl_file(jsonl_path)
 
         with conn:
+            ensure_audit_columns(conn)
             for json_record in json_records:
                 insert_log_record(conn, json_record)
 

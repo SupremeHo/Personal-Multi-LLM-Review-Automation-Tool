@@ -57,6 +57,21 @@ def resolve_model_entry(
     return price
 
 
+def preflight_pricing(price_path: str | Path, model_name: str) -> dict:
+    """
+    Validate everything that can be checked BEFORE a paid API call is made.
+
+    Confirms that the price table file exists and parses, and that the requested
+    model is known to the table. Run this before spending money so that a missing
+    price file or a mistyped model name fails cheaply instead of after billing.
+
+    Returns the loaded price table so the caller can reuse it (avoids a second load).
+    """
+    price_table = load_price_table(price_path)  # exists + parses
+    resolve_model_entry(price_table, model_name)  # model name is known
+    return price_table
+
+
 def to_decimal(value: int | float | str | None) -> Decimal | None:
     """
     solves floating-point errors to perform decimal operations that require high precision, such as financial calculations.
@@ -124,7 +139,6 @@ def notice_price_tag_update(updated_at: str = ""):
 
         if days_delta.days > 30:
             print("\nToken unit price information is over 30 days old. Check the price_****.json.\n")
-
     except ValueError as e:
         print(
             f"\n[count_cost.py][notice_price_tag_update] Error Message: There is no update date or the date format is different - {e}\n"
