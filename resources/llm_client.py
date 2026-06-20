@@ -1,4 +1,4 @@
-﻿# Module for calling LLMs API(GPT/Claude/Gemini/etc)
+# Module for calling LLMs API(GPT/Claude/Gemini/etc)
 # Extract the required value from the response object.
 # Returns objects such as LLMCallResult, which contains the LLM response content and metadata such as tokens used, model name, and finish_reason.
 

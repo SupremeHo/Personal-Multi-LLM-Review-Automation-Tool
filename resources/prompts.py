@@ -1,1 +1,1 @@
-﻿# prompt templates
+# prompt templates

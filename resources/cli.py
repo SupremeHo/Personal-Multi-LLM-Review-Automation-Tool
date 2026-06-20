@@ -1,4 +1,4 @@
-﻿# CLI module in charge of Typer command line.
+# CLI module in charge of Typer command line.
 
 import time  # noqa: I001
 from datetime import datetime

@@ -1,1 +1,1 @@
-﻿# Definition for data structure, type
+# Definition for data structure, type
