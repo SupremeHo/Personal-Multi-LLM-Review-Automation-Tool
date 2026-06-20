@@ -35,41 +35,31 @@ def ask(system_prompt: str, user_question: str):
     typer.echo("\n==== OpenAI GPT's Response ====\n")
     typer.echo(f"{result_openai.response_text}\n")
 
+    log_data = {
+        "run_id": run_id,
+        "created_at": created_at,
+        "system_prompt": system_prompt,
+        "user_prompt": user_question,
+        "success": True,
+        "error": None,
+        "elapsed_sec": round((end_time - start_time), 3),
+        "result": None,
+    }
+
     try:
-        log = LLMCallLog(
-            run_id=run_id,
-            created_at=created_at,
-            system_prompt=system_prompt,
-            user_prompt=user_question,
-            success=True,
-            error=None,
-            elapsed_sec=round(
-                (end_time - start_time), 3
-            ),  # Calculate the elapsed time (seconds) and round the value to third decimal place.
-            result=result_openai,
-        )
-
+        log_data["result"] = result_openai
     except Exception as e:
-        log = LLMCallLog(
-            run_id=run_id,
-            created_at=created_at,
-            system_prompt=system_prompt,
-            user_prompt=user_question,
-            success=False,
-            error=str(e),
-            elapsed_sec=round(
-                (end_time - start_time), 3
-            ),  # Calculate the elapsed time (seconds) and round the value to third decimal place.
-            result=result_openai,
-        )
-
+        log_data["success"] = False
+        log_data["error"] = str(e)
         typer.echo(f"[cli.py] Error Message: {e}")
 
+    log = LLMCallLog(**log_data)
+
     # Attatch the created time after the log's name.
-    gpt_response_filename = f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
+    filename_response_openai = f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
 
     # Specify a location to save the log as .jsonl file.
-    jsonl_path_openai = f"resources/logs/OpenAI/{gpt_response_filename}"
+    jsonl_path_openai = f"resources/logs/OpenAI/{filename_response_openai}"
 
     # Save the .jsonl file and store the log in SQLite DB.
     append_jsonl(jsonl_path_openai, log)
