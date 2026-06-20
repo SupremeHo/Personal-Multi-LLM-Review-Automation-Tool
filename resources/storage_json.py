@@ -37,12 +37,11 @@ def append_jsonl(file_path: str, record: BaseModel | dict) -> None:
     print(f"\nLLM response has been saved to <{file_path}>\n")
 
 
-def load_jsonl_file(file_path: Path):
+def load_jsonl_file(file_path: str | Path):
     """
     Load the JSONL file in logs' path.
     """
     path = Path(file_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
         with path.open("r", encoding="utf-8") as file:

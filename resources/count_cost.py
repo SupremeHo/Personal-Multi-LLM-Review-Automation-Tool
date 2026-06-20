@@ -103,29 +103,15 @@ def calculate_token_cost(
 
     notice_price_tag_update(price_table.get("updated_at"))
 
-    try:
-        return {
-            "input_usd": float(input_cost),
-            "cached_input_usd": float(cached_input_cost),
-            "output_usd": float(output_cost),
-            "total_usd": float(total_cost),
-            "estimated": True,
-            "pricing_updated_at": price_table.get("updated_at"),
-            "pricing_source": price_table.get("source"),
-        }
-
-    except InvalidOperation as e:
-        print(f"\n[count_cost.py][def calculate_token_cost] Error Message: Cost estimation failed - {e}\n")
-
-        return {
-            "input_usd": float(input_cost),
-            "cached_input_usd": float(cached_input_cost),
-            "output_usd": float(output_cost),
-            "total_usd": float(total_cost),
-            "estimated": False,
-            "pricing_updated_at": price_table.get("updated_at"),
-            "pricing_source": price_table.get("source"),
-        }
+    return {
+        "input_usd": float(input_cost),
+        "cached_input_usd": float(cached_input_cost),
+        "output_usd": float(output_cost),
+        "total_usd": float(total_cost),
+        "estimated": True,
+        "pricing_updated_at": price_table.get("updated_at"),
+        "pricing_source": price_table.get("source"),
+    }
 
 
 def notice_price_tag_update(updated_at: str = ""):

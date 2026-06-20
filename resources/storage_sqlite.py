@@ -4,7 +4,7 @@
 import json
 import sqlite3
 
-from .storage_json import load_jsonl_file
+from storage_json import load_jsonl_file
 
 
 def insert_log_record(conn: sqlite3.Connection, json_record: dict) -> None:
