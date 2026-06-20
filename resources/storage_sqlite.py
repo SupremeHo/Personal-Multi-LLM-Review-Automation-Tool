@@ -4,7 +4,7 @@
 import json
 import sqlite3
 
-from storage_json import load_jsonl_file
+from .storage_json import load_jsonl_file
 
 
 def insert_log_record(conn: sqlite3.Connection, json_record: dict) -> None:
@@ -47,7 +47,7 @@ def insert_log_record(conn: sqlite3.Connection, json_record: dict) -> None:
 
     conn.execute(
         """
-        INSERT INTO model_responses (
+        INSERT OR IGNORE INTO model_responses (
             response_id, run_id,
             provider, model, role, attempt_no,
             response_text, finish_reason, raw_response_id,

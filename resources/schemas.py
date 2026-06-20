@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict
 class TokenUsage(BaseModel):
     """Define a Pydantic models to represent the structure of the LLM's response and metadata."""
 
+    model_config = ConfigDict(extra="forbid")  # Forbid extra fields to ensure strict adherence to the defined schema.
+
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
@@ -17,6 +19,8 @@ class TokenUsage(BaseModel):
 
 class CostInfo(BaseModel):
     """Define a Pydantic model to represent the cost information of the LLM's call, including input, output, and total cost in USD."""
+
+    model_config = ConfigDict(extra="forbid")
 
     input_usd: float
     cached_input_usd: float | None = None
@@ -30,7 +34,7 @@ class CostInfo(BaseModel):
 class LLMCallResult(BaseModel):
     """Define a Pydantic model to represent the result of an LLM's call, including the response text, token usage, and other metadata."""
 
-    model_config = ConfigDict(extra="forbid")  # Forbid extra fields to ensure strict adherence to the defined schema.
+    model_config = ConfigDict(extra="forbid")
 
     response_id: str
     provider: str
@@ -45,7 +49,7 @@ class LLMCallResult(BaseModel):
 class LLMCallLog(BaseModel):
     """Define a Pydantic model to represent the log of an LLM's call."""
 
-    model_config = ConfigDict(extra="forbid")  # Forbid extra fields to ensure strict adherence to the defined schema.
+    model_config = ConfigDict(extra="forbid")
 
     run_id: str
     created_at: datetime
