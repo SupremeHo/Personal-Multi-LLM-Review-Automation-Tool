@@ -16,6 +16,7 @@ def list_available_models(client_openai: OpenAI, client_anthropic: Anthropic, cl
             print(
                 "\nWould you like to list the available API's models? Please select and enter one of the three companies. (OpenAI, Anthropic, or Google)"
             )
+
             answer = input(
                 "If you want to check the all available models, input the word 'Yes'. If you want to skip, input the word 'No': "
             ).lower()
@@ -40,14 +41,20 @@ def list_available_models(client_openai: OpenAI, client_anthropic: Anthropic, cl
             else:
                 print("\nPlease enter your input correctly.")
                 continue
+
         except EOFError:
             sys.exit("Error Message: Read beyond end of file. Exit the program.")
+
         except KeyboardInterrupt:
             sys.exit("Error Message: Program interrupted by user. Exit the program.")
 
 
 def list_available_openai_models(client):
     """The function listing the available models in OpenAI."""
+    if client is None:
+        print("Error Message: OpenAI client is unavailable. Check that the API key is set.")
+        return
+
     try:
         models = client.models.list()
         print("\n" + "======== Available OpenAI's Models ========")
@@ -55,6 +62,7 @@ def list_available_openai_models(client):
             if "gpt" in model.id:
                 print(model.id)
         print("======== Finished listing OpenAI's Models list ========\n")
+
     except OpenAIError as e:
         print(f"Error Message: Failed to list OpenAI's models: {e}")
         raise
@@ -62,12 +70,17 @@ def list_available_openai_models(client):
 
 def list_available_claude_models(client):
     """The function listing the available models in Anthropic."""
+    if client is None:
+        print("Error Message: Anthropic client is unavailable. Check that the API key is set.")
+        return
+
     try:
         models = client.models.list()
         print("\n" + "======== Available Anthropic's Models ========")
         for model in models:
             print(model.id)
         print("======== Finished listing Anthropic's Models list ========\n")
+
     except AnthropicError as e:
         print(f"Error Message: Failed to list Anthropic's models: {e}")
         raise
@@ -75,15 +88,20 @@ def list_available_claude_models(client):
 
 def list_available_gemini_models(client):
     """The function listing the available models in Google Gemini."""
+    if client is None:
+        print("Error Message: Google client is unavailable. Check that the API key is set.")
+        return
+
     try:
         models = client.models.list()
         print("\n" + "======== Available Google's Models ========")
         for model in models:
             if "gemini" in model.name:
                 text = model.name
-                new_text = text.strip("models/")
+                new_text = text.removeprefix("models/")
                 print(new_text)
         print("======== Finished listing Google's Models list ========\n")
+
     except errors.APIError as e:
         print(f"Error Message: Failed to list Google's models: {e}")
         raise
