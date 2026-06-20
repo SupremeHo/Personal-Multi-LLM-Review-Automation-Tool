@@ -1,6 +1,5 @@
 [project]
 name = "Personal Multi-LLM Review Automation Tool"
-dynamic = ["version"]
 description = "A multi-LLM platform that automates cross-validation of answers from multiple LLMs."
 readme = "README.md"
 
@@ -8,10 +7,6 @@ readme = "README.md"
 Homepage = "https://github.com/SupremeHo/Personal-Multi-LLM-Review-Automation-Tool"
 Repository = "https://github.com/SupremeHo/Personal-Multi-LLM-Review-Automation-Tool"
 Issues = "https://github.com/SupremeHo/Personal-Multi-LLM-Review-Automation-Tool/issues"
-
-[project.scripts]
-
-[dependency-groups]
 
 [tool.ruff]
 target-version = "py312"
