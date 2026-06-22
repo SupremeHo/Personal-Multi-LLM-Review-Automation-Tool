@@ -26,11 +26,15 @@ def append_jsonl(file_path: str, record: BaseModel | dict) -> None:
             json_file.write(json.dumps(json_data, ensure_ascii=False) + "\n")
 
     except PermissionError:
-        print(f"[storage_json.py][def append_jsonl] Error Message: Permission denied → cannot write to {file_path}")
+        print(
+            f"[storage_json.py][def append_jsonl] Error Message: Permission denied → cannot write to {file_path}"
+        )
         raise
 
     except OSError as e:
-        print(f"[storage_json.py][def append_jsonl] Error Message: Failed to write to {file_path}: {e}")
+        print(
+            f"[storage_json.py][def append_jsonl] Error Message: Failed to write to {file_path}: {e}"
+        )
         raise
 
     # Print a message indicating that the LLM response has been saved, along with the file path.
@@ -48,11 +52,15 @@ def load_jsonl_file(file_path: str | Path):
             json_data = [json.loads(line) for line in file if line.strip()]
 
     except FileNotFoundError:
-        print(f"[storage_json.py][def load_jsonl_file] Error Message: File not found - {file_path}")
+        print(
+            f"[storage_json.py][def load_jsonl_file] Error Message: File not found - {file_path}"
+        )
         raise
 
     except json.JSONDecodeError as e:
-        print(f"[storage_json.py][def load_jsonl_file] Error Message: Invalid JSON on line - {e}")
+        print(
+            f"[storage_json.py][def load_jsonl_file] Error Message: Invalid JSON on line - {e}"
+        )
         raise
 
     return json_data

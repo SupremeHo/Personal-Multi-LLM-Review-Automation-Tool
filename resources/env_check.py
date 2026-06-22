@@ -24,24 +24,42 @@ def check_environment_variables():
     REQUIRED_VARS_CLAUDE = ["ANTHROPIC_API_KEY"]
     REQUIRED_VARS_GEMINI = ["GEMINI_API_KEY"]
 
-    missing_vars_openai = [env_var for env_var in REQUIRED_VARS_OPENAI if not os.getenv(env_var)]
-    missing_vars_claude = [env_var for env_var in REQUIRED_VARS_CLAUDE if not os.getenv(env_var)]
-    missing_vars_gemini = [env_var for env_var in REQUIRED_VARS_GEMINI if not os.getenv(env_var)]
+    missing_vars_openai = [
+        env_var for env_var in REQUIRED_VARS_OPENAI if not os.getenv(env_var)
+    ]
+    missing_vars_claude = [
+        env_var for env_var in REQUIRED_VARS_CLAUDE if not os.getenv(env_var)
+    ]
+    missing_vars_gemini = [
+        env_var for env_var in REQUIRED_VARS_GEMINI if not os.getenv(env_var)
+    ]
 
     # 3) Providers are optional (see llm_client.py, which sets a client to None instead of
     # failing when its key is missing), so warn about missing keys instead of exiting.
     if missing_vars_openai:
-        sys.stderr.write("Warning: Environment Variable Missing: " + ", ".join(missing_vars_openai) + "\n")
+        sys.stderr.write(
+            "Warning: Environment Variable Missing: "
+            + ", ".join(missing_vars_openai)
+            + "\n"
+        )
         sys.stderr.write(
             ".env file is missing OpenAI API's required variables. Please check .env.example for the required variables.\n"
         )
     if missing_vars_claude:
-        sys.stderr.write("Warning: Environment Variable Missing: " + ", ".join(missing_vars_claude) + "\n")
+        sys.stderr.write(
+            "Warning: Environment Variable Missing: "
+            + ", ".join(missing_vars_claude)
+            + "\n"
+        )
         sys.stderr.write(
             ".env file is missing Anthropic API's required variables. Please check .env.example for the required variables.\n"
         )
     if missing_vars_gemini:
-        sys.stderr.write("Warning: Environment Variable Missing: " + ", ".join(missing_vars_gemini) + "\n")
+        sys.stderr.write(
+            "Warning: Environment Variable Missing: "
+            + ", ".join(missing_vars_gemini)
+            + "\n"
+        )
         sys.stderr.write(
             ".env file is missing Google API's required variables. Please check .env.example for the required variables.\n"
         )

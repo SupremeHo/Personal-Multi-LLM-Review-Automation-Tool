@@ -57,7 +57,12 @@ except errors.APIError as e:
 
 
 # 2) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
-def ask_openai(system_prompt: str, user_question: str, response_id: str, selected_model: str = "gpt-4o-mini") -> LLMCallResult:
+def ask_openai(
+    system_prompt: str,
+    user_question: str,
+    response_id: str,
+    selected_model: str = "gpt-4o-mini",
+) -> LLMCallResult:
     """
     Call the OpenAI API to get a response from the specified model based on the provided system prompt and user question.
 
@@ -85,14 +90,20 @@ def ask_openai(system_prompt: str, user_question: str, response_id: str, selecte
     try:
         openai_choice = openai_response.choices[0]
     except IndexError:
-        print("[llm_client.py] Error Message: There aren't choices in OpenAI's response.\n")
+        print(
+            "[llm_client.py] Error Message: There aren't choices in OpenAI's response.\n"
+        )
         raise
 
     # Extract token usage information from the OpenAI response and create a TokenUsage object.
     openai_usage = openai_response.usage
 
     try:
-        cached_tokens = openai_usage.prompt_tokens_details.cached_tokens if openai_usage.prompt_tokens_details else None
+        cached_tokens = (
+            openai_usage.prompt_tokens_details.cached_tokens
+            if openai_usage.prompt_tokens_details
+            else None
+        )
 
         token_usage_openai = TokenUsage(
             prompt_tokens=openai_usage.prompt_tokens,
@@ -101,7 +112,9 @@ def ask_openai(system_prompt: str, user_question: str, response_id: str, selecte
             cached_tokens=cached_tokens,
         )
     except AttributeError:
-        print("[llm_client.py] Error Message: There is no usage info in OpenAI's response.\n")
+        print(
+            "[llm_client.py] Error Message: There is no usage info in OpenAI's response.\n"
+        )
         raise
 
     # Best-effort cost calculation. If it fails (e.g. a broken price entry), keep the error aside so we can
@@ -127,7 +140,9 @@ def ask_openai(system_prompt: str, user_question: str, response_id: str, selecte
         )
     except Exception as e:  # noqa: BLE001 - any cost failure must not discard the paid response.
         cost_error = e
-        print(f"[llm_client.py] Error Message: Cost calculation failed after billing - {e}\n")
+        print(
+            f"[llm_client.py] Error Message: Cost calculation failed after billing - {e}\n"
+        )
 
     # Extract the relevant information from the OpenAI response and assemble the result object.
     result = LLMCallResult(
@@ -148,9 +163,13 @@ def ask_openai(system_prompt: str, user_question: str, response_id: str, selecte
     return result
 
 
-def ask_anthropic(system_prompt: str, user_question: str, selected_model: str = "") -> LLMCallResult:
+def ask_anthropic(
+    system_prompt: str, user_question: str, selected_model: str = ""
+) -> LLMCallResult:
     raise NotImplementedError("Anthropic integration not yet implemented")
 
 
-def ask_google(system_prompt: str, user_question: str, selected_model: str = "") -> LLMCallResult:
+def ask_google(
+    system_prompt: str, user_question: str, selected_model: str = ""
+) -> LLMCallResult:
     raise NotImplementedError("Google Gemini integration not yet implemented")

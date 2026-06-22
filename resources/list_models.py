@@ -9,7 +9,9 @@ from google.genai import errors
 from openai import OpenAI, OpenAIError
 
 
-def list_available_models(client_openai: OpenAI, client_anthropic: Anthropic, client_google: genai):
+def list_available_models(
+    client_openai: OpenAI, client_anthropic: Anthropic, client_google: genai
+):
     """The function to ask users whether they want to list the available LLM models or not"""
     while True:
         try:
@@ -52,7 +54,9 @@ def list_available_models(client_openai: OpenAI, client_anthropic: Anthropic, cl
 def list_available_openai_models(client):
     """The function listing the available models in OpenAI."""
     if client is None:
-        print("Error Message: OpenAI client is unavailable. Check that the API key is set.")
+        print(
+            "Error Message: OpenAI client is unavailable. Check that the API key is set."
+        )
         return
 
     try:
@@ -71,7 +75,9 @@ def list_available_openai_models(client):
 def list_available_claude_models(client):
     """The function listing the available models in Anthropic."""
     if client is None:
-        print("Error Message: Anthropic client is unavailable. Check that the API key is set.")
+        print(
+            "Error Message: Anthropic client is unavailable. Check that the API key is set."
+        )
         return
 
     try:
@@ -89,7 +95,9 @@ def list_available_claude_models(client):
 def list_available_gemini_models(client):
     """The function listing the available models in Google Gemini."""
     if client is None:
-        print("Error Message: Google client is unavailable. Check that the API key is set.")
+        print(
+            "Error Message: Google client is unavailable. Check that the API key is set."
+        )
         return
 
     try:

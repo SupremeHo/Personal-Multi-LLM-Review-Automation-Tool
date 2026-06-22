@@ -21,11 +21,15 @@ DB_PATH = BASE_DIR / "db" / "llm_responses.db"
 app = typer.Typer()
 
 
-# Defining the ask command. Prompt the user for a question and output the question.
 @app.command()
 def ask(system_prompt: str, user_question: str):
+    """
+    Defining the ask command. Prompt the user for a question and output the question.
+    """
     run_id = str(uuid4())  # Create a unique non-overlapping unique ID.
-    response_id = str(uuid4())  # Create a UUID for identification of individual LLM response units.
+    response_id = str(
+        uuid4()
+    )  # Create a UUID for identification of individual LLM response units.
     created_at = datetime.now()  # The time when the LLMs' responses were made.
 
     # Single source of truth for the audit log. Built once, then filled in place below so the log can never
@@ -43,7 +47,9 @@ def ask(system_prompt: str, user_question: str):
         "result": None,
     }
 
-    start_time = time.perf_counter()  # Measure the latency of the API call (recorded even on failure).
+    start_time = (
+        time.perf_counter()
+    )  # Measure the latency of the API call (recorded even on failure).
     try:
         result_openai = ask_openai(system_prompt, user_question, response_id)
         log_data["success"] = True
@@ -72,7 +78,9 @@ def ask(system_prompt: str, user_question: str):
     log = LLMCallLog(**log_data)
 
     # Attatch the created time after the log's name.
-    filename_response_openai = f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
+    filename_response_openai = (
+        f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
+    )
 
     # Specify a location to save the log as .jsonl file.
     jsonl_path_openai = BASE_DIR / "logs" / "OpenAI" / filename_response_openai
@@ -82,27 +90,37 @@ def ask(system_prompt: str, user_question: str):
     import_jsonl_to_sqlite(str(jsonl_path_openai), str(DB_PATH))
 
 
-# Load environment variables from .env file with the checking function defined in env_check.py.
 @app.command()
 def check_env():
+    """
+    Load environment variables from .env file with the checking function defined in env_check.py.
+    """
     check_environment_variables()
 
 
-# Defining the list-models command. This will list available models from the OpenAI API.
 @app.command()
 def list_models():
-    list_available_models(llm_client.client_openai, llm_client.client_anthropic, llm_client.client_google)
+    """
+    Defining the list-models command. This will list available models from the OpenAI API.
+    """
+    list_available_models(
+        llm_client.client_openai, llm_client.client_anthropic, llm_client.client_google
+    )
 
 
-# Not yet implemented. This command will show the user's history of questions and LLM responses.
 @app.command()
 def history(name: str, lastname: str = "", formal: bool = False):
+    """
+    Not yet implemented. This command will show the user's history of questions and LLM responses.\
+    """
     if formal:
         typer.echo(f"Hello, {name} {lastname}! Here is your history.")
     else:
         typer.echo(f"Hi {name}! Here is your history.")
 
 
-# Run the Typer application, handling commands and accepting user input.
 if __name__ == "__main__":
+    """
+    Run the Typer application, handling commands and accepting user input.
+    """
     app()

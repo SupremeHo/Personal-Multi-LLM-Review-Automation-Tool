@@ -19,7 +19,9 @@ def load_price_table(path: str | Path) -> dict:
             return json.load(f)
 
     except FileNotFoundError:
-        print(f"[count_cost.py][def load_price_table] Error Message: No such file or directory: {path}\n")
+        print(
+            f"[count_cost.py][def load_price_table] Error Message: No such file or directory: {path}\n"
+        )
         raise
 
     except json.JSONDecodeError as e:
@@ -44,14 +46,18 @@ def resolve_model_entry(
     try:
         price = models[model_name]
     except KeyError:
-        print(f"[count_cost.py][def resolve_model_entry] Error Message: Price table for model '{model_name}' was not found.\n")
+        print(
+            f"[count_cost.py][def resolve_model_entry] Error Message: Price table for model '{model_name}' was not found.\n"
+        )
         raise
 
     try:
         if "alias_of" in price:
             return models[price["alias_of"]]
     except KeyError:
-        print("[count_cost.py][def resolve_model_entry] Error Message: Model that alias_of refers to was not found.\n")
+        print(
+            "[count_cost.py][def resolve_model_entry] Error Message: Model that alias_of refers to was not found.\n"
+        )
         raise
 
     return price
@@ -82,7 +88,9 @@ def to_decimal(value: int | float | str | None) -> Decimal | None:
     try:
         return Decimal(str(value))
     except InvalidOperation:
-        print("[count_cost.py][def to_decimal] Error Message: Invalid operation or conversion.\n")
+        print(
+            "[count_cost.py][def to_decimal] Error Message: Invalid operation or conversion.\n"
+        )
         raise
 
 
@@ -110,7 +118,9 @@ def calculate_token_cost(
     cached_input_cost = Decimal("0")
 
     if cached_input_tokens > 0 and cached_input_rate is not None:
-        cached_input_cost = Decimal(cached_input_tokens) / Decimal(1_000_000) * cached_input_rate
+        cached_input_cost = (
+            Decimal(cached_input_tokens) / Decimal(1_000_000) * cached_input_rate
+        )
 
     output_cost = Decimal(output_tokens) / Decimal(1_000_000) * output_rate
 
@@ -138,7 +148,9 @@ def notice_price_tag_update(updated_at: str = ""):
         days_delta = today_obj - updated_at_obj
 
         if days_delta.days > 30:
-            print("\nToken unit price information is over 30 days old. Check the price_****.json.\n")
+            print(
+                "\nToken unit price information is over 30 days old. Check the price_****.json.\n"
+            )
     except ValueError as e:
         print(
             f"\n[count_cost.py][notice_price_tag_update] Error Message: There is no update date or the date format is different - {e}\n"

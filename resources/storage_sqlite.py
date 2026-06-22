@@ -34,7 +34,9 @@ def insert_log_record(conn: sqlite3.Connection, json_record: dict) -> None:
         run_id = json_record["run_id"]
         created_at = json_record["created_at"]
     except KeyError:
-        print("[storage_sqlite.py][def insert_log_record] Error Message: Missing required field in record.")
+        print(
+            "[storage_sqlite.py][def insert_log_record] Error Message: Missing required field in record."
+        )
         raise
 
     raw_json = json.dumps(json_record, ensure_ascii=False)
@@ -55,7 +57,9 @@ def insert_log_record(conn: sqlite3.Connection, json_record: dict) -> None:
             json_record.get("system_prompt", ""),
             json_record.get("user_prompt", ""),
             int(bool(json_record.get("success", False))),
-            json.dumps(json_record.get("error"), ensure_ascii=False) if json_record.get("error") is not None else None,
+            json.dumps(json_record.get("error"), ensure_ascii=False)
+            if json_record.get("error") is not None
+            else None,
             json_record.get("error_type"),
             json_record.get("elapsed_sec"),
             raw_json,
@@ -114,7 +118,9 @@ def import_jsonl_to_sqlite(jsonl_path: str, db_path: str) -> None:
         conn = sqlite3.connect(db_path)
 
     except sqlite3.OperationalError:
-        print(f"[storage_sqlite.py][def import_jsonl_to_sqlite] Error Message: Failed to connect to database '{db_path}'")
+        print(
+            f"[storage_sqlite.py][def import_jsonl_to_sqlite] Error Message: Failed to connect to database '{db_path}'"
+        )
         raise
 
     try:
