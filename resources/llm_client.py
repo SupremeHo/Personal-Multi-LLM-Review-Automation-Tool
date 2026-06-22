@@ -15,22 +15,6 @@ from count_cost import calculate_token_cost, preflight_pricing
 from schemas import CostInfo, LLMCallResult, TokenUsage
 
 
-class PaidResponseError(Exception):
-    """
-    Raised when a paid API call already succeeded (a response was billed and received)
-    but a later, non-billing step failed - for example cost calculation.
-
-    The run should be judged a failure, yet the response and token usage we already
-    paid for must not be discarded. This exception carries that partial result so the
-    caller can persist it as an audit log instead of losing it.
-    """
-
-    def __init__(self, result: LLMCallResult, original: Exception):
-        self.result = result  # The response/tokens that were already paid for.
-        self.original = original  # The underlying failure that happened after billing.
-        super().__init__(str(original))
-
-
 # Resolve price tables relative to this file so the lookup does not depend on the current working directory.
 PRICE_DIR = Path(__file__).resolve().parent / "config" / "prices"
 PRICE_PATH_OPENAI = PRICE_DIR / "prices_openai.json"
@@ -54,6 +38,22 @@ try:
 except errors.APIError as e:
     print(f"[llm_client.py] Error Message: {e}. Error while using Google API.")
     client_google = None
+
+
+class PaidResponseError(Exception):
+    """
+    Raised when a paid API call already succeeded (a response was billed and received)
+    but a later, non-billing step failed - for example cost calculation.
+
+    The run should be judged a failure, yet the response and token usage we already
+    paid for must not be discarded. This exception carries that partial result so the
+    caller can persist it as an audit log instead of losing it.
+    """
+
+    def __init__(self, result: LLMCallResult, original: Exception):
+        self.result = result  # The response/tokens that were already paid for.
+        self.original = original  # The underlying failure that happened after billing.
+        super().__init__(str(original))
 
 
 # 2) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
