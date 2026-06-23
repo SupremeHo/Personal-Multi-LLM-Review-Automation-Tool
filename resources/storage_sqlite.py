@@ -9,7 +9,7 @@ from storage_json import load_jsonl_file
 
 def ensure_audit_columns(conn: sqlite3.Connection) -> None:
     """
-    Add audit columns to the "runs" table if an older database predates them. Idempotent: safe to call every time.
+    Add audit columns to the "runs" table if an older database predates them.Idempotent: safe to call every time.
     Keeps failed-call metadata (provider, error_type) queryable without recreating the database.
     """
     existing_columns = {row[1] for row in conn.execute("PRAGMA table_info(runs)")}

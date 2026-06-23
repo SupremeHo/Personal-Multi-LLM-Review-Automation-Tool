@@ -20,7 +20,7 @@ PRICE_DIR = Path(__file__).resolve().parent / "config" / "prices"
 PRICE_PATH_OPENAI = PRICE_DIR / "prices_openai.json"
 
 
-# 1) Create an instance of the clients in OpenAI, Anthropic and Goolge, which will be used to interact with the OpenAI, Anthropic and Google API.
+# Create an instance of the clients in OpenAI, Anthropic and Goolge, which will be used to interact with the OpenAI, Anthropic and Google API.
 try:
     client_openai = OpenAI()
 except openai.OpenAIError as e:
@@ -56,7 +56,6 @@ class PaidResponseError(Exception):
         super().__init__(str(original))
 
 
-# 2) Make a call to the OpenAI API to create a chat completion using the LLM model (ex. "gpt-4o-mini").
 def ask_openai(
     system_prompt: str,
     user_question: str,
@@ -64,9 +63,22 @@ def ask_openai(
     selected_model: str = "gpt-4o-mini",
 ) -> LLMCallResult:
     """
-    Call the OpenAI API to get a response from the specified model based on the provided system prompt and user question.
+    Usage:
+     Call the OpenAI API to get a response from the specified model
+     based on the provided system prompt and user question.
 
-    Returns an LLMCallResult object containing the response text and metadata.
+     Returns an LLMCallResult object containing the response text and metadata.
+
+    ---
+
+    Arguments:
+      system_prompt: An instruction that predetermines how LLM should respond.
+
+      user_question: A message to LLM for questions or instructions (The more specific and clear, the better.)
+
+      response_id: UUID for identification of individual LLM response units.
+
+      selected_model: OpenAI's model ID(ex. "gpt-4o-mini") used to generate the response.
     """
     if client_openai is None:
         raise RuntimeError(

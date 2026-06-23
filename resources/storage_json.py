@@ -9,7 +9,8 @@ from pydantic import BaseModel
 
 def append_jsonl(file_path: str, record: BaseModel | dict) -> None:
     """
-    Append a record (dict or Pydantic model) to a JSONL file. If the file does not exist, it will be created.
+    Append a record (dict or Pydantic model) to a JSONL file.
+    If the file does not exist, it will be created.
     """
     path = Path(file_path)
     path.parent.mkdir(parents=True, exist_ok=True)

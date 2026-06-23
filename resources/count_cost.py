@@ -37,9 +37,11 @@ def resolve_model_entry(
 ) -> dict:
     """
     Resolve the price for a given model from the price table.
+
     If the model is an alias of another model, resolve the price of the original model.
-    ex) gpt-4o-mini-2024-07-18 ===> gpt-4o-mini.
-    If the model is not found in the price table, raise a ValueError.
+    ex) `gpt-4o-mini-2024-07-18` → `gpt-4o-mini`.
+
+    If the model is not found in the price table, raise a KeyError.
     """
     models = price_table.get("models", {})
 
@@ -80,7 +82,8 @@ def preflight_pricing(price_path: str | Path, model_name: str) -> dict:
 
 def to_decimal(value: int | float | str | None) -> Decimal | None:
     """
-    solves floating-point errors to perform decimal operations that require high precision, such as financial calculations.
+    Solve the floating-point errors to perform decimal operations that require high precision,
+    such as financial calculations.
     """
     if value is None:
         return None
@@ -140,7 +143,10 @@ def calculate_token_cost(
 
 
 def notice_price_tag_update(updated_at: str = ""):
-    """Notice an alert for renewal if it's been 30 days since the update about price information."""
+    """
+    Notice an alert for renewal if it's been 30 days
+    since the update about price information
+    """
     try:
         today_obj = datetime.datetime.now()
         updated_at_obj = datetime.datetime.strptime(updated_at, "%Y-%m-%d")
