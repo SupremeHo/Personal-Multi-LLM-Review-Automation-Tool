@@ -16,7 +16,7 @@ from schemas import CostInfo, LLMCallResult, TokenUsage
 
 
 # Resolve price tables relative to this file so the lookup does not depend on the current working directory.
-PRICE_DIR = Path(__file__).resolve().parent / "config" / "prices"
+PRICE_DIR = Path(__file__).resolve().parent.parent / "config" / "prices"
 PRICE_PATH_OPENAI = PRICE_DIR / "prices_openai.json"
 
 
@@ -56,11 +56,14 @@ class PaidResponseError(Exception):
         super().__init__(str(original))
 
 
+SELECTED_MODEL = "gpt-4o-mini"
+
+
 def ask_openai(
     system_prompt: str,
     user_question: str,
     response_id: str,
-    selected_model: str = "gpt-4o-mini",
+    selected_model: str = SELECTED_MODEL,
 ) -> LLMCallResult:
     """
     Usage:

@@ -165,10 +165,14 @@ def notice_price_tag_update(updated_at: str = ""):
 
 
 # def main():
-#     price_table = load_price_table("resources/config/prices/prices_openai.json")
+#     price_table = load_price_table("config/prices/prices_openai.json")
 #     model_name = "gpt-4o-mini"
 #     calculation_result = calculate_token_cost(
-#         price_table=price_table, model_name=model_name, input_tokens=1000, output_tokens=2000, cached_input_tokens=0
+#         price_table=price_table,
+#         model_name=model_name,
+#         input_tokens=1000,
+#         output_tokens=2000,
+#         cached_input_tokens=0,
 #     )
 #     print(calculation_result)
 
