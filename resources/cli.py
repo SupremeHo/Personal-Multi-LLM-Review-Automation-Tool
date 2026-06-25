@@ -111,12 +111,9 @@ def list_models():
 @app.command()
 def history(name: str, lastname: str = "", formal: bool = False):
     """
-    Not yet implemented. This command will show the user's history of questions and LLM responses.\
+    Not yet implemented. This command will show the user's history of questions and LLM responses.
     """
-    if formal:
-        typer.echo(f"Hello, {name} {lastname}! Here is your history.")
-    else:
-        typer.echo(f"Hi {name}! Here is your history.")
+    raise NotImplementedError("History command is not yet implemented.")
 
 
 if __name__ == "__main__":
