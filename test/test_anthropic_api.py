@@ -1,0 +1,24 @@
+from anthropic import Anthropic
+
+system_prompt = "너는 내가 터미널 CLI에서 API를 호출하는 것을 도와주는 어시스턴트야."
+user_question = "내가 만들고 있는 프로젝트가 있어. 여러 LLM을 불러와서 사용자의 질문에 대한 서로의 답변을 교차검증하는 시스템이지. 이번에 OpenAI API 호출하고 DB에 저장하는 것까지 했고, 이번엔 Anthropic과 Google API를 호출하는 기능을 만드는 중이라서 호출 방식을 통일하고 있는 중이야. 그건 그렇다 치고, LLM에게 적용된 정확한 시스템 프롬프트 문자열을 인식하여 사용자에게 그대로 보여줄 수는 없다고 하는데, API 보안 때문에 그런 것도 있을까?"
+
+client = Anthropic()
+
+
+def createMessage(system_prompt, user_question):
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": user_question}],
+    )
+
+    print(message.content[0].text)
+
+
+def main():
+    createMessage(system_prompt, user_question)
+
+
+if __name__ == "__main__":
+    main()
