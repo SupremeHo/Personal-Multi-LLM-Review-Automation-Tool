@@ -389,6 +389,5 @@ Thumbs.db
 .idea/
 .venv_py312/
 .venv_py313/
-/Config
 *.mmd
 .claude/
