@@ -1,24 +1,30 @@
-from google import genai
-from google.genai import types
+import os
 
-client = genai.Client()
+from openai import OpenAI
 
 system_prompt = "You are a helpful assistant."
 user_question = "Hello. I'm currently testing if the Google API works well in the terminal CLI environment. If you see this message, could you please create a short English sentence for the current date and time, with the phrase 'API connection successful!'?"
 
 
-def generateContent(system_prompt, user_question):
-    content = client.models.generate_content(
-        model="gemini-2.5-flash",
-        config=types.GenerateContentConfig(system_instruction=system_prompt),
-        contents=user_question,
+def generateChatGoogle(system_prompt, user_question):
+    client = OpenAI(
+        api_key=os.environ.get("GEMINI_API_KEY"),
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",  # the Google Gemini API endpoint
     )
 
-    print(content.text)
+    response = client.chat.completions.create(
+        model="gemini-2.5-flash",  # Gemini model name
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_question},
+        ],
+    )
+
+    print(response.choices[0].message.content)
 
 
 def main():
-    generateContent(system_prompt, user_question)
+    generateChatGoogle(system_prompt, user_question)
 
 
 if __name__ == "__main__":
