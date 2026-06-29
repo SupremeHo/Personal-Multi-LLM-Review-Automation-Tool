@@ -6,7 +6,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 
-class TokenUsage(BaseModel):
+class TokenUsageInfo(BaseModel):
     """
     Define a Pydantic models to represent the structure of the LLM's response and metadata.
     """
@@ -92,7 +92,7 @@ class LLMCallResult(BaseModel):
     raw_response_id: str | None = None
     """Unique ID given to identify the initial response source (Raw Response)."""
 
-    usage: TokenUsage
+    usage: TokenUsageInfo
     """Token usage infomation about the prompt and model's response."""
 
     cost: CostInfo | None = None
@@ -121,3 +121,9 @@ class LLMCallLog(BaseModel):
         None  # Latency in seconds, recorded for both successful and failed attempts.
     )
     result: LLMCallResult | None = None
+
+
+class LLMRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    raise NotImplementedError

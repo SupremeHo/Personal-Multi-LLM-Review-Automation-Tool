@@ -12,7 +12,7 @@ from google.genai import errors
 from openai import OpenAI
 
 from count_cost import calculate_token_cost, preflight_pricing
-from schemas import CostInfo, LLMCallResult, TokenUsage
+from schemas import CostInfo, LLMCallResult, TokenUsageInfo
 
 
 # Resolve price tables relative to this file so the lookup does not depend on the current working directory.
@@ -110,7 +110,7 @@ def ask_openai(
         )
         raise
 
-    # Extract token usage information from the OpenAI response and create a TokenUsage object.
+    # Extract token usage information from the OpenAI response and create a TokenUsageInfo object.
     openai_usage = openai_response.usage
 
     try:
@@ -120,7 +120,7 @@ def ask_openai(
             else None
         )
 
-        token_usage_openai = TokenUsage(
+        token_usage_openai = TokenUsageInfo(
             prompt_tokens=openai_usage.prompt_tokens,
             completion_tokens=openai_usage.completion_tokens,
             total_tokens=openai_usage.total_tokens,
