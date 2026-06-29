@@ -62,6 +62,14 @@ class CostInfo(BaseModel):
     """
 
 
+class ErrorInfo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class LLMRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
 class LLMCallResult(BaseModel):
     """
     Define a Pydantic model to represent the result of an LLM's call,
@@ -121,9 +129,3 @@ class LLMCallLog(BaseModel):
         None  # Latency in seconds, recorded for both successful and failed attempts.
     )
     result: LLMCallResult | None = None
-
-
-class LLMRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    raise NotImplementedError
