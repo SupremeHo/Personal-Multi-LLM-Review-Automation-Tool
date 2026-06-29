@@ -62,10 +62,6 @@ class CostInfo(BaseModel):
     """
 
 
-class ErrorInfo(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-
 class LLMRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -129,3 +125,21 @@ class LLMCallLog(BaseModel):
         None  # Latency in seconds, recorded for both successful and failed attempts.
     )
     result: LLMCallResult | None = None
+
+
+class ErrorInfo(BaseModel):
+    """
+    I put ErrorInfo in the list of common schemas. Stop here and ask myself.
+
+    Is this ErrorInfo "data recording failures in the log" or "failure expression that provider returns instead of raise"? The two are completely different decisions, and when mixed, it becomes the worst (a mix of exceptions and data) that we warned last time.
+
+    * Now the code is exception propagation. If the provider fails, raise it, and bring up partial results with PaidResponseError.
+
+    * But in comparison (three calls at the same time), the situation is different. If one provider raises, the other two can be stopped. For simultaneous calls, it is correct to collect the results of each provider as a 'value' whether it is successful or unsuccessful — so that the last partial/quorum is established.
+
+    In other words, single-ask and multi-compare can have different error models. Claude's recommendation is to keep provider contracts simple (LLMCallResult on success, raise on failure), and the conversion to ErrorInfo is done by the service layer compare loop with an exception. This ensures that provider contracts are not dirty, and the responsibility to "turn failure into data" arises only where multi-calls are aggregated.
+
+    → It's not a fixed issue. Before putting ErrorInfo into the schema, I need to decide "where this is made (provider or service)". The whole structure depends on who makes it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
