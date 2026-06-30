@@ -1,5 +1,6 @@
 import os
 
+from anthropic import Anthropic
 from openai import OpenAI
 
 system_prompt = "You are a helpful assistant."
@@ -20,11 +21,25 @@ def generateChatAnthropic(system_prompt, user_question):
         ],
     )
 
-    print(response.choices[0].message.content)
+    print(response.choices[0].message.content + "\n")
+
+
+def generateMessageWithNativeAnthropicAPI(system_prompt, user_question):
+    client = Anthropic()
+
+    message = client.messages.create(
+        model="claude-haiku-4-5",
+        max_tokens=2048,
+        system=system_prompt,
+        messages=[{"role": "user", "content": user_question}],
+    )
+
+    print(message.content[0].text + "\n")
 
 
 def main():
-    generateChatAnthropic(system_prompt, user_question)
+    # generateChatAnthropic(system_prompt, user_question)
+    generateMessageWithNativeAnthropicAPI(system_prompt, user_question)
 
 
 if __name__ == "__main__":
