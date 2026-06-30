@@ -5,5 +5,5 @@ from resources.providers import base_provider
 
 
 def ask():
-    base_provider.ChatProvider.generateRequest()
+    base_provider.ChatProvider.ask()
     raise NotImplementedError
