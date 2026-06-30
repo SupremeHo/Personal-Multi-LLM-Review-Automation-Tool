@@ -6,20 +6,31 @@
 #   * Resolve providers through the registry only (never import a concrete one).
 #   * Turn each call's outcome into data: an LLMCallLog always, plus an ErrorInfo
 #     for failures in the multi-compare flow so one failure never stops the rest.
-#
-# Persistence (JSONL + SQLite) is intentionally NOT done here yet; it is wired in
-# during the cli switch (Phase 6), together with the import-style unification.
+#   * Archive each log to JSONL + SQLite via persist_log().
 
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from uuid import uuid4
 
 from resources.providers.registry import get_provider
 from resources.providers.response_error import PaidResponseError
 from resources.schemas import ErrorInfo, LLMCallLog, LLMCallResult, LLMRequest
+from resources.storage_json import append_jsonl
+from resources.storage_sqlite import import_jsonl_to_sqlite
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+DB_PATH = BASE_DIR / "db" / "llm_responses.db"
+
+# Per-provider on-disk log layout: provider key -> (subdirectory, filename prefix).
+LOG_LAYOUT = {
+    "openai": ("OpenAI", "gpt"),
+    "anthropic": ("Anthropic", "claude"),
+    "google": ("Google", "gemini"),
+}
 
 
 def make_request(
@@ -91,6 +102,23 @@ def run_request(
     return LLMCallLog(**log_data)
 
 
+def persist_log(log: LLMCallLog) -> None:
+    """
+    Archive one audit log to a per-provider JSONL file and into SQLite.
+
+    The log is always written - success or failure - so every run, including
+    billed-but-failed ones, leaves an auditable record.
+    """
+    dir_name, prefix = LOG_LAYOUT.get(
+        log.provider or "", (log.provider or "unknown", log.provider or "log")
+    )
+    filename = f"{prefix}_response_log_{log.created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
+    path = BASE_DIR / "logs" / dir_name / filename
+
+    append_jsonl(str(path), log)
+    import_jsonl_to_sqlite(str(path), str(DB_PATH))
+
+
 def ask(
     system_prompt: str,
     user_question: str,
@@ -98,18 +126,22 @@ def ask(
     selected_model: str,
     *,
     max_tokens: int = 4096,
+    persist: bool = True,
 ) -> LLMCallLog:
     """
-    Single-provider ask: mint ids, build the request, call the provider, return the log.
+    Single-provider ask: mint ids, build the request, call the provider, log it.
 
-    Persistence is the caller's job (Phase 6 wires it through cli).
+    Archives the log by default; pass persist=False to skip all I/O (e.g. tests).
     """
     run_id = str(uuid4())
     created_at = datetime.now()
     request = make_request(
         system_prompt, user_question, selected_model, max_tokens=max_tokens
     )
-    return run_request(run_id, request, provider_name, created_at)
+    log = run_request(run_id, request, provider_name, created_at)
+    if persist:
+        persist_log(log)
+    return log
 
 
 @dataclass
@@ -133,6 +165,7 @@ def compare(
     targets: list[tuple[str, str]],
     *,
     max_tokens: int = 4096,
+    persist: bool = True,
 ) -> CompareResult:
     """
     Ask several (provider, model) targets the same question under one run_id.
@@ -153,6 +186,8 @@ def compare(
             system_prompt, user_question, selected_model, max_tokens=max_tokens
         )
         log = run_request(run_id, request, provider_name, created_at)
+        if persist:
+            persist_log(log)
         outcome.logs.append(log)
 
         if log.success and log.result is not None:

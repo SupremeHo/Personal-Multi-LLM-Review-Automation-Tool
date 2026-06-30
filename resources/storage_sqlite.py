@@ -4,7 +4,7 @@
 import json
 import sqlite3
 
-from storage_json import load_jsonl_file
+from resources.storage_json import load_jsonl_file
 
 
 def ensure_audit_columns(conn: sqlite3.Connection) -> None:
