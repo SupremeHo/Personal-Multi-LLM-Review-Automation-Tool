@@ -3,7 +3,7 @@
 
 from typing import Protocol
 
-from provider_anthropic import AnthropicProvider
+from provider_anthropic import AnthropicNativeProvider
 from provider_google import GoogleProvider
 from provider_openai import OpenAIProvider
 
@@ -12,7 +12,7 @@ from resources.schemas import LLMCallResult, LLMRequest
 # providers/registry.py (Conceptual Sketch)
 PROVIDERS = {
     "openai": OpenAIProvider,
-    "anthropic": AnthropicProvider,
+    "anthropic": AnthropicNativeProvider,
     "google": GoogleProvider,
 }
 
@@ -20,5 +20,5 @@ PROVIDERS = {
 class ChatProvider(Protocol):
     provider_name: str
 
-    async def generate(self, request: LLMRequest) -> LLMCallResult:
+    async def generateRequest(self, request: LLMRequest) -> LLMCallResult:
         raise NotImplementedError
