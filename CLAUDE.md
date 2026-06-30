@@ -57,7 +57,12 @@ pip install -r requirements_py313_win.txt   # or requirements_py312_win.txt
 
 Database — the SQLite file `db/llm_responses.db` is created/seeded from `db/_create_table.sql` (run it once with the `sqlite3` CLI or any client). `storage_sqlite.py` connects to an **existing** DB and only `ALTER`s in missing audit columns; it does not create the tables.
 
-Tests — `test/` contains `test.py`, `test_anthropic_api.py`, `test_google_api.py`, but they are ad-hoc scripts (much of `test.py` is commented out), not a pytest suite. There is no configured test runner. The provider/service layers are testable without paid calls by injecting fakes into `registry.PROVIDERS` and calling `service_ask.ask(..., persist=False)`.
+Tests — the pytest suite lives in `tests/` (config in `pyproject.toml` sets `testpaths = ["tests"]`). It makes **no paid calls**: provider parsing is tested with fake SDK responses, and the service layer by injecting fakes into `registry.PROVIDERS` and calling `service_ask.ask(..., persist=False)`. Shared fakes/fixtures are in `tests/fakes.py` and `tests/conftest.py`. The legacy `test/` (singular) holds the author's older ad-hoc scripts that hit real APIs; those are intentionally excluded from collection. Run and install:
+
+```bash
+pip install -r requirements_dev_win.txt   # pytest (test-only dep)
+python -m pytest                           # from the project root
+```
 
 ## Data flow (the `ask` path)
 
