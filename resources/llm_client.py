@@ -4,11 +4,7 @@
 
 from pathlib import Path  # noqa: I001
 
-import anthropic
 import openai
-from anthropic import Anthropic
-from google import genai
-from google.genai import errors
 from openai import OpenAI
 
 from count_cost import calculate_token_cost, preflight_pricing
@@ -27,17 +23,8 @@ except openai.OpenAIError as e:
     print(f"[llm_client.py] Error Message: {e}. Error while using OpenAI API.")
     client_openai = None
 
-try:
-    client_anthropic = Anthropic()
-except anthropic.AnthropicError as e:
-    print(f"[llm_client.py] Error Message: {e}. Error while using Anthropic API.")
-    client_anthropic = None
 
-try:
-    client_google = genai.Client()
-except errors.APIError as e:
-    print(f"[llm_client.py] Error Message: {e}. Error while using Google API.")
-    client_google = None
+SELECTED_MODEL = "gpt-4o-mini"
 
 
 class PaidResponseError(Exception):
@@ -54,9 +41,6 @@ class PaidResponseError(Exception):
         self.result = result  # The response/tokens that were already paid for.
         self.original = original  # The underlying failure that happened after billing.
         super().__init__(str(original))
-
-
-SELECTED_MODEL = "gpt-4o-mini"
 
 
 def ask_openai(
@@ -121,8 +105,8 @@ def ask_openai(
         )
 
         token_usage_openai = TokenUsageInfo(
-            prompt_tokens=openai_usage.prompt_tokens,
-            completion_tokens=openai_usage.completion_tokens,
+            input_tokens=openai_usage.prompt_tokens,
+            output_tokens=openai_usage.completion_tokens,
             total_tokens=openai_usage.total_tokens,
             cached_tokens=cached_tokens,
         )
@@ -176,15 +160,3 @@ def ask_openai(
         raise PaidResponseError(result, cost_error)
 
     return result
-
-
-def ask_anthropic(
-    system_prompt: str, user_question: str, selected_model: str = ""
-) -> LLMCallResult:
-    raise NotImplementedError("Anthropic integration not yet implemented")
-
-
-def ask_google(
-    system_prompt: str, user_question: str, selected_model: str = ""
-) -> LLMCallResult:
-    raise NotImplementedError("Google Gemini integration not yet implemented")
