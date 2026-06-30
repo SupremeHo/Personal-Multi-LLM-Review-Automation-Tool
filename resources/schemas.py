@@ -15,17 +15,17 @@ class TokenUsageInfo(BaseModel):
         extra="forbid"
     )  # Forbid extra fields to ensure strict adherence to the defined schema.
 
-    prompt_tokens: int
-    """Number of tokens in the prompt in TokenUsage."""
+    input_tokens: int
+    """Number of tokens in the prompt."""
 
-    completion_tokens: int
-    """Number of tokens in the generated completion in TokenUsage."""
+    output_tokens: int
+    """Number of tokens in the generated completion."""
 
     total_tokens: int
-    """Total number of tokens used in the request (prompt + completion) in TokenUsage."""
+    """Total number of tokens used in the request (input(prompt) + output(completion) + cached tokens)."""
 
     cached_tokens: int | None = None
-    """Cached tokens present in the prompt in TokenUsage."""
+    """Cached tokens present in the prompt."""
 
 
 class CostInfo(BaseModel):
@@ -63,7 +63,16 @@ class CostInfo(BaseModel):
 
 
 class LLMRequest(BaseModel):
+    """
+    Define a Pydantic model to represent a request to LLMs,
+    including the system prompt, user's question, and selected model.
+    """
+
     model_config = ConfigDict(extra="forbid")
+
+    system_prompt: str
+    user_question: str
+    selected_model: str
 
 
 class LLMCallResult(BaseModel):
