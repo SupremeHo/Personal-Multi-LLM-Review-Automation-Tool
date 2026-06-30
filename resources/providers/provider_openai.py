@@ -7,9 +7,9 @@ from uuid import uuid4
 import openai
 from openai import OpenAI
 
-from response_error import PaidResponseError
-from resources.count_cost import calculate_token_cost, preflight_pricing
-from resources.schemas import CostInfo, LLMCallResult, TokenUsageInfo
+from count_cost import calculate_token_cost, preflight_pricing
+from providers.response_error import PaidResponseError
+from schemas import CostInfo, LLMCallResult, TokenUsageInfo
 
 PRICE_DIR = Path(__file__).resolve().parent.parent.parent / "config" / "prices"
 PRICE_PATH_OPENAI = PRICE_DIR / "prices_openai.json"
@@ -98,8 +98,8 @@ class OpenAIProvider(Protocol):
             )
 
             token_usage_openai = TokenUsageInfo(
-                prompt_tokens=usage_openai.prompt_tokens,
-                completion_tokens=usage_openai.completion_tokens,
+                input_tokens=usage_openai.prompt_tokens,
+                output_tokens=usage_openai.completion_tokens,
                 total_tokens=usage_openai.total_tokens,
                 cached_tokens=cached_tokens,
             )
@@ -153,3 +153,14 @@ class OpenAIProvider(Protocol):
             raise PaidResponseError(result, cost_error)
 
         return result
+
+
+def main():
+    system_prompt = "You are a helpful assistant."
+    user_question = "Hello. I'm currently testing if the Google API works well in the terminal CLI environment. If you see this message, could you please create a short English sentence for the current date and time, with the phrase 'API connection successful!'?"
+
+    print(OpenAIProvider.ask(system_prompt, user_question, SELECTED_MODEL))
+
+
+if __name__ == "__main__":
+    main()
