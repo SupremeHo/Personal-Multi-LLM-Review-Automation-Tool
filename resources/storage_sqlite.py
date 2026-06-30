@@ -30,6 +30,24 @@ def insert_log_record(conn: sqlite3.Connection, json_record: dict) -> None:
     usage = result.get("usage") or {}
     cost = result.get("cost") or {}
 
+    # Map the provider-neutral schema fields onto the flat DB columns.
+    input_tokens = usage.get("input_tokens", 0) or 0
+    output_tokens = usage.get("output_tokens", 0) or 0
+
+    # total_tokens is optional in the schema (some providers omit it); derive it when missing.
+    total_tokens = usage.get("total_tokens")
+    if total_tokens is None:
+        total_tokens = input_tokens + output_tokens
+
+    # The cache breakdown is provider-specific and preserved in full inside raw_json.
+    # The single cached_tokens column stores a coarse rollup (only one provider's
+    # fields are populated per row, so summing is safe).
+    cached_tokens = (
+        (usage.get("cached_input_tokens") or 0)
+        + (usage.get("cache_creation_input_tokens") or 0)
+        + (usage.get("cache_read_input_tokens") or 0)
+    )
+
     try:
         run_id = json_record["run_id"]
         created_at = json_record["created_at"]
@@ -94,10 +112,10 @@ def insert_log_record(conn: sqlite3.Connection, json_record: dict) -> None:
             result.get("response_text"),
             result.get("finish_reason"),
             result.get("raw_response_id"),
-            usage.get("prompt_tokens", 0),
-            usage.get("completion_tokens", 0),
-            usage.get("total_tokens", 0),
-            usage.get("cached_tokens", 0),
+            input_tokens,
+            output_tokens,
+            total_tokens,
+            cached_tokens,
             cost.get("input_usd", 0),
             cost.get("cached_input_usd", 0),
             cost.get("output_usd", 0),
