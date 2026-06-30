@@ -4,6 +4,7 @@
 import json
 import sqlite3
 
+from resources.diagnostics import print_error
 from resources.storage_json import load_jsonl_file
 
 
@@ -52,8 +53,10 @@ def insert_log_record(conn: sqlite3.Connection, json_record: dict) -> None:
         run_id = json_record["run_id"]
         created_at = json_record["created_at"]
     except KeyError:
-        print(
-            "[storage_sqlite.py][def insert_log_record] Error Message: Missing required field in record."
+        print_error(
+            "Missing required field in record.",
+            module="storage_sqlite.py",
+            func="insert_log_record",
         )
         raise
 
@@ -136,8 +139,10 @@ def import_jsonl_to_sqlite(jsonl_path: str, db_path: str) -> None:
         conn = sqlite3.connect(db_path)
 
     except sqlite3.OperationalError:
-        print(
-            f"[storage_sqlite.py][def import_jsonl_to_sqlite] Error Message: Failed to connect to database '{db_path}'"
+        print_error(
+            f"Failed to connect to database '{db_path}'",
+            module="storage_sqlite.py",
+            func="import_jsonl_to_sqlite",
         )
         raise
 
