@@ -1,17 +1,20 @@
 # This module is responsible for absorbing the unique fields of OpenAI's API and translating them into LLMCallResult.
 
-from pathlib import Path
+from pathlib import Path  # noqa: I001
 from typing import Protocol
 from uuid import uuid4
 
 import openai
 from openai import OpenAI
 
+from response_error import PaidResponseError
 from resources.count_cost import calculate_token_cost, preflight_pricing
 from resources.schemas import CostInfo, LLMCallResult, TokenUsageInfo
 
-PRICE_DIR = Path(__file__).resolve().parent.parent / "config" / "prices"
+PRICE_DIR = Path(__file__).resolve().parent.parent.parent / "config" / "prices"
 PRICE_PATH_OPENAI = PRICE_DIR / "prices_openai.json"
+
+SELECTED_MODEL = "gpt-4o-mini"
 
 try:
     client = OpenAI()
@@ -19,20 +22,19 @@ except openai.OpenAIError:
     client = None
 
 
-class PaidResponseError(Exception):
-    """
-    Raised when a paid API call already succeeded (a response was billed and received)
-    but a later, non-billing step failed - for example cost calculation.
+class OpenAICompatibleTransport(Protocol):
+    def chatCompletionsCreate(
+        self, system_prompt: str, user_question: str, selected_model: str
+    ):
+        response = client.chat.completions.create(
+            model=selected_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_question},
+            ],
+        )
 
-    The run should be judged a failure, yet the response and token usage we already
-    paid for must not be discarded. This exception carries that partial result so the
-    caller can persist it as an audit log instead of losing it.
-    """
-
-    def __init__(self, result: LLMCallResult, original: Exception):
-        self.result = result  # The response/tokens that were already paid for.
-        self.original = original  # The underlying failure that happened after billing.
-        super().__init__(str(original))
+        return response
 
 
 class OpenAIProvider(Protocol):
@@ -59,15 +61,16 @@ class OpenAIProvider(Protocol):
 
         if client is None:
             raise RuntimeError(
-                "[llm_client.py] Error Message: OpenAI client is unavailable. Check OPENAI_API_KEY and the environment setup.\n"
+                "[provider_openai.py] Error Message: OpenAI client is unavailable. Check OPENAI_API_KEY and the environment setup.\n"
             )
 
         # Preflight: validate the price table and model name BEFORE the paid call so that a missing
         # price file or a mistyped model fails for free instead of after we have already been billed.
+        selected_model = SELECTED_MODEL
         price_table_openai = preflight_pricing(PRICE_PATH_OPENAI, selected_model)
 
         # >>>>> Paid call. Money is spent here. <<<<<
-        openai_response = client.chat.completions.create(
+        response_openai = client.chat.completions.create(
             model=selected_model,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -77,32 +80,32 @@ class OpenAIProvider(Protocol):
 
         # >>>>> Everything below runs AFTER billing; a failure here must not throw away the paid response. <<<<<
         try:
-            openai_choice = openai_response.choices[0]
+            choice_openai = response_openai.choices[0]
         except IndexError:
             print(
-                "[llm_client.py] Error Message: There aren't choices in OpenAI's response.\n"
+                "[provider_openai.py] Error Message: There aren't choices in OpenAI's response.\n"
             )
             raise
 
         # Extract token usage information from the OpenAI response and create a TokenUsage object.
-        openai_usage = openai_response.usage
+        usage_openai = response_openai.usage
 
         try:
             cached_tokens = (
-                openai_usage.prompt_tokens_details.cached_tokens
-                if openai_usage.prompt_tokens_details
+                usage_openai.prompt_tokens_details.cached_tokens
+                if usage_openai.prompt_tokens_details
                 else None
             )
 
             token_usage_openai = TokenUsageInfo(
-                prompt_tokens=openai_usage.prompt_tokens,
-                completion_tokens=openai_usage.completion_tokens,
-                total_tokens=openai_usage.total_tokens,
+                prompt_tokens=usage_openai.prompt_tokens,
+                completion_tokens=usage_openai.completion_tokens,
+                total_tokens=usage_openai.total_tokens,
                 cached_tokens=cached_tokens,
             )
         except AttributeError:
             print(
-                "[llm_client.py] Error Message: There is no usage info in OpenAI's response.\n"
+                "[provider_openai.py] Error Message: There is no usage info in OpenAI's response.\n"
             )
             raise
 
@@ -113,9 +116,9 @@ class OpenAIProvider(Protocol):
         try:
             cost_openai = calculate_token_cost(
                 price_table=price_table_openai,
-                model_name=openai_response.model,
-                input_tokens=openai_usage.prompt_tokens,
-                output_tokens=openai_usage.completion_tokens,
+                model_name=response_openai.model,
+                input_tokens=usage_openai.prompt_tokens,
+                output_tokens=usage_openai.completion_tokens,
                 cached_input_tokens=cached_tokens or 0,
             )
             cost_info_openai = CostInfo(
@@ -130,17 +133,17 @@ class OpenAIProvider(Protocol):
         except Exception as e:  # noqa: BLE001 - any cost failure must not discard the paid response.
             cost_error = e
             print(
-                f"[llm_client.py] Error Message: Cost calculation failed after billing - {e}\n"
+                f"[provider_openai.py] Error Message: Cost calculation failed after billing - {e}\n"
             )
 
         # Extract the relevant information from the OpenAI response and assemble the result object.
         result = LLMCallResult(
             response_id=str(uuid4),
             provider="OpenAI",
-            model=openai_response.model,
-            response_text=openai_choice.message.content,
-            finish_reason=openai_choice.finish_reason,
-            raw_response_id=getattr(openai_response, "id", None),
+            model=response_openai.model,
+            response_text=choice_openai.message.content,
+            finish_reason=choice_openai.finish_reason,
+            raw_response_id=getattr(response_openai, "id", None),
             usage=token_usage_openai,
             cost=cost_info_openai,
         )
