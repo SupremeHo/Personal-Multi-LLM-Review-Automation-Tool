@@ -12,7 +12,7 @@ A personal CLI tool that sends a prompt to LLM providers, then logs each respons
 
 The code is a single layered architecture under `resources/`, used as a package with **package-absolute imports** (`from resources.schemas import ...`) and run from the **project root**. The earlier "flat modules vs. SOLID rewrite" split is gone (`llm_client.py` was removed; its logic now lives in the provider/service layers).
 
-```
+```bash
 cli.py                         # thin Typer layer: parse args → delegate → render
   └─ services/service_ask.py   # owns ids (run_id/response_id), builds logs, collects ErrorInfo, archives
        └─ providers/registry.py        # name → ChatProvider instance (the only place that knows concrete providers)
