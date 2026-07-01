@@ -7,8 +7,6 @@ import json
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from resources.diagnostics import print_error
-
 
 def load_price_table(path: str | Path) -> dict:
     """
@@ -21,15 +19,13 @@ def load_price_table(path: str | Path) -> dict:
             return json.load(f)
 
     except FileNotFoundError:
-        print_error(
-            f"No such file or directory: {path}",
-            module="count_cost.py",
-            func="load_price_table",
+        print(
+            f"[count_cost.py][def load_price_table] Error Message: No such file or directory: {path}\n"
         )
         raise
 
     except json.JSONDecodeError as e:
-        print_error(e.msg, module="count_cost.py", func="load_price_table")
+        print(f"[count_cost.py][def load_price_table] Error Message: {e.msg}")
         print(f"Error Location (Line: {e.lineno}, Column: {e.colno})")
         print(f"JSON string in error: {e.doc}\n")
         raise
@@ -52,10 +48,8 @@ def resolve_model_entry(
     try:
         price = models[model_name]
     except KeyError:
-        print_error(
-            f"Price table for model '{model_name}' was not found.",
-            module="count_cost.py",
-            func="resolve_model_entry",
+        print(
+            f"[count_cost.py][def resolve_model_entry] Error Message: Price table for model '{model_name}' was not found.\n"
         )
         raise
 
@@ -63,10 +57,8 @@ def resolve_model_entry(
         if "alias_of" in price:
             return models[price["alias_of"]]
     except KeyError:
-        print_error(
-            "Model that alias_of refers to was not found.",
-            module="count_cost.py",
-            func="resolve_model_entry",
+        print(
+            "[count_cost.py][def resolve_model_entry] Error Message: Model that alias_of refers to was not found.\n"
         )
         raise
 
@@ -99,10 +91,8 @@ def to_decimal(value: int | float | str | None) -> Decimal | None:
     try:
         return Decimal(str(value))
     except InvalidOperation:
-        print_error(
-            "Invalid operation or conversion.",
-            module="count_cost.py",
-            func="to_decimal",
+        print(
+            "[count_cost.py][def to_decimal] Error Message: Invalid operation or conversion.\n"
         )
         raise
 
@@ -168,23 +158,17 @@ def notice_price_tag_update(updated_at: str = ""):
                 "\nToken unit price information is over 30 days old. Check the price_****.json.\n"
             )
     except ValueError as e:
-        print_error(
-            f"There is no update date or the date format is different - {e}",
-            module="count_cost.py",
-            func="notice_price_tag_update",
+        print(
+            f"\n[count_cost.py][notice_price_tag_update] Error Message: There is no update date or the date format is different - {e}\n"
         )
         return None
 
 
 # def main():
-#     price_table = load_price_table("config/prices/prices_openai.json")
+#     price_table = load_price_table("resources/config/prices/prices_openai.json")
 #     model_name = "gpt-4o-mini"
 #     calculation_result = calculate_token_cost(
-#         price_table=price_table,
-#         model_name=model_name,
-#         input_tokens=1000,
-#         output_tokens=2000,
-#         cached_input_tokens=0,
+#         price_table=price_table, model_name=model_name, input_tokens=1000, output_tokens=2000, cached_input_tokens=0
 #     )
 #     print(calculation_result)
 

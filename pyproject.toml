@@ -8,11 +8,6 @@ Homepage = "https://github.com/SupremeHo/Personal-Multi-LLM-Review-Automation-To
 Repository = "https://github.com/SupremeHo/Personal-Multi-LLM-Review-Automation-Tool"
 Issues = "https://github.com/SupremeHo/Personal-Multi-LLM-Review-Automation-Tool/issues"
 
-[tool.pytest.ini_options]
-# Only collect the pytest suite under tests/; the legacy test/ scripts make real
-# API calls and are not part of the automated suite.
-testpaths = ["tests"]
-
 [tool.ruff]
 target-version = "py312"
 line-length = 88

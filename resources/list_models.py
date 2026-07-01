@@ -2,8 +2,6 @@
 # You can choose to list all models or skip this step based on user input.
 
 import sys
-from collections.abc import Callable
-from typing import Any
 
 from anthropic import Anthropic, AnthropicError
 from google import genai
@@ -11,65 +9,10 @@ from google.genai import errors
 from openai import OpenAI, OpenAIError
 
 
-def _list_models(
-    client: Any,
-    *,
-    label: str,
-    error_type: type[Exception],
-    extract: Callable[[Any], str | None],
-) -> None:
-    """
-    List a single provider's models.
-
-    Providers differ only in their label, the error type they raise, and how a
-    model id is extracted/filtered (`extract` returns the name to print, or None
-    to skip), so the listing logic itself is written once here.
-    """
-    if client is None:
-        print(f"Error Message: {label} client is unavailable. Check that the API key is set.")
-        return
-
-    try:
-        models = client.models.list()
-        print("\n" + f"======== Available {label}'s Models ========")
-        for model in models:
-            name = extract(model)
-            if name is not None:
-                print(name)
-        print(f"======== Finished listing {label}'s Models list ========\n")
-
-    except error_type as e:
-        print(f"Error Message: Failed to list {label}'s models: {e}")
-        raise
-
-
 def list_available_models(
     client_openai: OpenAI, client_anthropic: Anthropic, client_google: genai
 ):
-    """Ask the user which provider's models to list, then list them."""
-    listers = {
-        "openai": lambda: _list_models(
-            client_openai,
-            label="OpenAI",
-            error_type=OpenAIError,
-            extract=lambda m: m.id if "gpt" in m.id else None,
-        ),
-        "anthropic": lambda: _list_models(
-            client_anthropic,
-            label="Anthropic",
-            error_type=AnthropicError,
-            extract=lambda m: m.id,
-        ),
-        "google": lambda: _list_models(
-            client_google,
-            label="Google",
-            error_type=errors.APIError,
-            extract=lambda m: (
-                m.name.removeprefix("models/") if "gemini" in m.name else None
-            ),
-        ),
-    }
-
+    """The function to ask users whether they want to list the available LLM models or not"""
     while True:
         try:
             print(
@@ -80,12 +23,19 @@ def list_available_models(
                 "If you want to check the all available models, input the word 'Yes'. If you want to skip, input the word 'No': "
             ).lower()
 
-            if answer in listers:
-                listers[answer]()
+            if answer == "openai":
+                list_available_openai_models(client_openai)
+                break
+            elif answer == "anthropic":
+                list_available_claude_models(client_anthropic)
+                break
+            elif answer == "google":
+                list_available_gemini_models(client_google)
                 break
             elif answer == "yes":
-                for lister in listers.values():
-                    lister()
+                list_available_openai_models(client_openai)
+                list_available_claude_models(client_anthropic)
+                list_available_gemini_models(client_google)
                 break
             elif answer == "no":
                 print("\nSkipping model listing...\n")
@@ -99,3 +49,82 @@ def list_available_models(
 
         except KeyboardInterrupt:
             sys.exit("Error Message: Program interrupted by user. Exit the program.")
+
+
+def list_available_openai_models(client):
+    """The function listing the available models in OpenAI."""
+    if client is None:
+        print(
+            "Error Message: OpenAI client is unavailable. Check that the API key is set."
+        )
+        return
+
+    try:
+        models = client.models.list()
+        print("\n" + "======== Available OpenAI's Models ========")
+        for model in models:
+            if "gpt" in model.id:
+                print(model.id)
+        print("======== Finished listing OpenAI's Models list ========\n")
+
+    except OpenAIError as e:
+        print(f"Error Message: Failed to list OpenAI's models: {e}")
+        raise
+
+
+def list_available_claude_models(client):
+    """The function listing the available models in Anthropic."""
+    if client is None:
+        print(
+            "Error Message: Anthropic client is unavailable. Check that the API key is set."
+        )
+        return
+
+    try:
+        models = client.models.list()
+        print("\n" + "======== Available Anthropic's Models ========")
+        for model in models:
+            print(model.id)
+        print("======== Finished listing Anthropic's Models list ========\n")
+
+    except AnthropicError as e:
+        print(f"Error Message: Failed to list Anthropic's models: {e}")
+        raise
+
+
+def list_available_gemini_models(client):
+    """The function listing the available models in Google Gemini."""
+    if client is None:
+        print(
+            "Error Message: Google client is unavailable. Check that the API key is set."
+        )
+        return
+
+    try:
+        models = client.models.list()
+        print("\n" + "======== Available Google's Models ========")
+        for model in models:
+            if "gemini" in model.name:
+                text = model.name
+                new_text = text.removeprefix("models/")
+                print(new_text)
+        print("======== Finished listing Google's Models list ========\n")
+
+    except errors.APIError as e:
+        print(f"Error Message: Failed to list Google's models: {e}")
+        raise
+
+
+# def main():
+#     client_openai = OpenAI()
+#     client_anthropic = Anthropic()
+#     client_google = genai.Client()
+#     list_available_models(client_openai, client_anthropic, client_google)
+
+
+# if __name__ == "__main__":
+#     try:
+#         main()
+#     except Exception as e:
+#         print(f"Program failed: {e}", file=sys.stderr)
+#         sys.exit(1)

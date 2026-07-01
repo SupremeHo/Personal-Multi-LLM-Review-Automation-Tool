@@ -376,7 +376,6 @@ venv/
 
 # Vector DB · Database files
 .chroma/
-*.sql
 *.sqlite
 *.db
 chroma_db/
@@ -386,8 +385,10 @@ chroma_db/
 Thumbs.db
 
 # Custom workspace settings
+*.sql
 .idea/
 .venv_py312/
 .venv_py313/
+resources/Config
 *.mmd
-ONBOARDING.md
+.claude/
