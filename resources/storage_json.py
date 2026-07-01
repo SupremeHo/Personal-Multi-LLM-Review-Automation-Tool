@@ -6,6 +6,8 @@ import json  # noqa: I001
 from pathlib import Path
 from pydantic import BaseModel
 
+from resources.diagnostics import print_error
+
 
 def append_jsonl(file_path: str, record: BaseModel | dict) -> None:
     """
@@ -27,14 +29,18 @@ def append_jsonl(file_path: str, record: BaseModel | dict) -> None:
             json_file.write(json.dumps(json_data, ensure_ascii=False) + "\n")
 
     except PermissionError:
-        print(
-            f"[storage_json.py][def append_jsonl] Error Message: Permission denied → cannot write to {file_path}"
+        print_error(
+            f"Permission denied → cannot write to {file_path}",
+            module="storage_json.py",
+            func="append_jsonl",
         )
         raise
 
     except OSError as e:
-        print(
-            f"[storage_json.py][def append_jsonl] Error Message: Failed to write to {file_path}: {e}"
+        print_error(
+            f"Failed to write to {file_path}: {e}",
+            module="storage_json.py",
+            func="append_jsonl",
         )
         raise
 
@@ -53,14 +59,18 @@ def load_jsonl_file(file_path: str | Path):
             json_data = [json.loads(line) for line in file if line.strip()]
 
     except FileNotFoundError:
-        print(
-            f"[storage_json.py][def load_jsonl_file] Error Message: File not found - {file_path}"
+        print_error(
+            f"File not found - {file_path}",
+            module="storage_json.py",
+            func="load_jsonl_file",
         )
         raise
 
     except json.JSONDecodeError as e:
-        print(
-            f"[storage_json.py][def load_jsonl_file] Error Message: Invalid JSON on line - {e}"
+        print_error(
+            f"Invalid JSON on line - {e}",
+            module="storage_json.py",
+            func="load_jsonl_file",
         )
         raise
 

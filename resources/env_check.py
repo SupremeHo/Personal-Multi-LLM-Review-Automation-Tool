@@ -19,53 +19,32 @@ def check_environment_variables():
 
     load_dotenv()  # 1) Load environment variables from a .env file into the application's environment using the load_dotenv function from the python-dotenv library.
 
-    # 2) Define a list of required environment variables that the application needs to function properly.
-    REQUIRED_VARS_OPENAI = ["OPENAI_API_KEY"]
-    REQUIRED_VARS_CLAUDE = ["ANTHROPIC_API_KEY"]
-    REQUIRED_VARS_GEMINI = ["GEMINI_API_KEY"]
+    # 2) Required environment variables per provider. Driven by one table so adding
+    #    a provider is a single entry instead of three more parallel blocks.
+    REQUIRED_VARS = {
+        "OpenAI": ["OPENAI_API_KEY"],
+        "Anthropic": ["ANTHROPIC_API_KEY"],
+        "Google": ["GEMINI_API_KEY"],
+    }
 
-    missing_vars_openai = [
-        env_var for env_var in REQUIRED_VARS_OPENAI if not os.getenv(env_var)
-    ]
-    missing_vars_claude = [
-        env_var for env_var in REQUIRED_VARS_CLAUDE if not os.getenv(env_var)
-    ]
-    missing_vars_gemini = [
-        env_var for env_var in REQUIRED_VARS_GEMINI if not os.getenv(env_var)
-    ]
+    missing_by_provider = {
+        provider: [env_var for env_var in keys if not os.getenv(env_var)]
+        for provider, keys in REQUIRED_VARS.items()
+    }
 
-    # 3) Providers are optional (see llm_client.py, which sets a client to None instead of
+    # 3) Providers are optional (each provider_*.py sets its client to None instead of
     # failing when its key is missing), so warn about missing keys instead of exiting.
-    if missing_vars_openai:
-        sys.stderr.write(
-            "Warning: Environment Variable Missing: "
-            + ", ".join(missing_vars_openai)
-            + "\n"
-        )
-        sys.stderr.write(
-            ".env file is missing OpenAI API's required variables. Please check .env.example for the required variables.\n"
-        )
-    if missing_vars_claude:
-        sys.stderr.write(
-            "Warning: Environment Variable Missing: "
-            + ", ".join(missing_vars_claude)
-            + "\n"
-        )
-        sys.stderr.write(
-            ".env file is missing Anthropic API's required variables. Please check .env.example for the required variables.\n"
-        )
-    if missing_vars_gemini:
-        sys.stderr.write(
-            "Warning: Environment Variable Missing: "
-            + ", ".join(missing_vars_gemini)
-            + "\n"
-        )
-        sys.stderr.write(
-            ".env file is missing Google API's required variables. Please check .env.example for the required variables.\n"
-        )
+    for provider, missing_vars in missing_by_provider.items():
+        if missing_vars:
+            sys.stderr.write(
+                "Warning: Environment Variable Missing: " + ", ".join(missing_vars) + "\n"
+            )
+            sys.stderr.write(
+                f".env file is missing {provider} API's required variables. Please check .env.example for the required variables.\n"
+            )
 
     # 4) If all required environment variables are set, print a confirmation message.
-    if not (missing_vars_openai or missing_vars_claude or missing_vars_gemini):
+    if not any(missing_by_provider.values()):
         print("All environment variables are set.\n")
 
     # 5) Optionally, show the first 12 characters of APIs' required environment variables for verification (avoid printing the entire key for security reasons).
@@ -76,9 +55,8 @@ def check_environment_variables():
             ).lower()
 
             if check_values == "y":
-                show_key_values_12_chars(REQUIRED_VARS_OPENAI)
-                show_key_values_12_chars(REQUIRED_VARS_CLAUDE)
-                show_key_values_12_chars(REQUIRED_VARS_GEMINI)
+                for keys in REQUIRED_VARS.values():
+                    show_key_values_12_chars(keys)
                 break
             elif check_values == "n":
                 print("\nSkipping validation for environment variables...\n")
