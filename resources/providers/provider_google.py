@@ -1,12 +1,19 @@
-# This module is responsible for absorbing the unique fields of Google's API and translating them into LLMCallResult.
+# Google (Gemini) provider: stub implementation of the ChatProvider contract.
+#
+# Not yet wired up. Once implemented it will follow the same shape as the OpenAI
+# and Anthropic providers: supply a _call_api and a _parse_response to
+# runner.run_chat. Kept as a concrete class (not a Protocol) so the registry can
+# treat all providers uniformly.
 
-from typing import Protocol
+from __future__ import annotations
 
-from resources.schemas import LLMCallResult
+from resources.schemas import LLMCallResult, LLMRequest
 
 
-class GoogleProvider(Protocol):
-    def ask(
-        self, system_prompt: str, user_question: str, selected_model: str
-    ) -> LLMCallResult:
-        raise NotImplementedError
+class GoogleProvider:
+    """Google Gemini implementation of the ChatProvider contract (not yet implemented)."""
+
+    provider_name = "google"
+
+    def ask(self, request: LLMRequest) -> LLMCallResult:
+        raise NotImplementedError("GoogleProvider.ask is not yet implemented.")
