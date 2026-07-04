@@ -108,7 +108,7 @@ def ask_openai(
             input_tokens=openai_usage.prompt_tokens,
             output_tokens=openai_usage.completion_tokens,
             total_tokens=openai_usage.total_tokens,
-            cached_tokens=cached_tokens,
+            cached_input_tokens=cached_tokens,
         )
     except AttributeError:
         print(
