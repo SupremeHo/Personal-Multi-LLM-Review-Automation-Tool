@@ -65,7 +65,7 @@ def run_chat(
     """
     if client is None:
         raise RuntimeError(
-            f"[runner] Error Message: '{provider_name}' client is unavailable. "
+            f"[runner.py] Error Message: '{provider_name}' client is unavailable. "
             f"Check the API key and the environment setup.\n"
         )
 
@@ -96,7 +96,7 @@ def run_chat(
     except Exception as e:  # noqa: BLE001 - any cost failure must not discard the paid response.
         cost_error = e
         print(
-            f"[runner] Error Message: Cost calculation failed after billing "
+            f"[runner.py] Error Message: Cost calculation failed after billing "
             f"({provider_name}) - {e}\n"
         )
 
