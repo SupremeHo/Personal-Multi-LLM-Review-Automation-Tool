@@ -392,3 +392,4 @@ Thumbs.db
 resources/Config
 *.mmd
 .claude/
+CLAUDE.md
