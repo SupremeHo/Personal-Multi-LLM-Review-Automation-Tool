@@ -34,7 +34,7 @@ def check_environment_variables():
         env_var for env_var in REQUIRED_VARS_GEMINI if not os.getenv(env_var)
     ]
 
-    # 3) Providers are optional (see llm_client.py, which sets a client to None instead of
+    # 3) Providers are optional (each provider_*.py sets its client to None instead of
     # failing when its key is missing), so warn about missing keys instead of exiting.
     if missing_vars_openai:
         sys.stderr.write(

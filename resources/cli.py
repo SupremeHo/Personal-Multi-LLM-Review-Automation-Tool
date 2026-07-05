@@ -1,99 +1,94 @@
-# CLI module in charge of Typer command line.
-
-import time  # noqa: I001
-from datetime import datetime
-from pathlib import Path
-from uuid import uuid4
+# CLI module in charge of the Typer command line.
+#
+# The cli is thin: it parses arguments, delegates to the service layer (which
+# owns ids, provider calls, logging, and archiving), and renders the result.
+# Run from the project root: `python -m resources.cli ask "<system>" "<question>"`.
 
 import typer
-import llm_client
 
-from env_check import check_environment_variables
-from list_models import list_available_models
-from llm_client import PaidResponseError, ask_openai
-from schemas import LLMCallLog
-from storage_json import append_jsonl
-from storage_sqlite import import_jsonl_to_sqlite
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-DB_PATH = BASE_DIR / "db" / "llm_responses.db"
+from resources.env_check import check_environment_variables
+from resources.list_models import list_available_models
+from resources.services import service_ask
 
 app = typer.Typer()
 
 
+def _render_log(log) -> None:
+    """Print a single call's outcome (success, salvaged partial, or failure)."""
+    if log.success and log.result is not None:
+        typer.echo(f"\n==== {log.provider} response ====\n")
+        typer.echo(f"{log.result.response_text}\n")
+    elif log.result is not None:
+        # Billed but a later step failed; the paid response was preserved.
+        typer.echo(f"[cli.py] Partial failure (response preserved): {log.error}")
+        typer.echo(f"{log.result.response_text}\n")
+    else:
+        typer.echo(f"[cli.py] Error Message: {log.error}")
+
+
 @app.command()
-def ask(system_prompt: str, user_question: str):
+def ask(
+    system_prompt: str,
+    user_question: str,
+    provider: str = "openai",
+    model: str = "gpt-4o-mini",
+):
     """
-    Defining the ask command. Prompt the user for a question and output the question.
+    Ask a single provider/model a question; logs to JSONL + SQLite.
     """
-    run_id = str(uuid4())  # Create a unique non-overlapping unique ID.
-    response_id = str(
-        uuid4()
-    )  # Create a UUID for identification of individual LLM response units.
-    created_at = datetime.now()  # The time when the LLMs' responses were made.
+    log = service_ask.ask(system_prompt, user_question, provider, model)
+    _render_log(log)
 
-    # Single source of truth for the audit log. Built once, then filled in place below so the log can never
-    # be referenced before assignment (the old bug) and is never duplicated. It is saved no matter what happens.
-    log_data = {
-        "run_id": run_id,
-        "created_at": created_at,
-        "provider": "OpenAI",
-        "system_prompt": system_prompt,
-        "user_prompt": user_question,
-        "success": False,
-        "error": None,
-        "error_type": None,
-        "elapsed_sec": None,
-        "result": None,
-    }
 
-    start_time = (
-        time.perf_counter()
-    )  # Measure the latency of the API call (recorded even on failure).
-    try:
-        result_openai = ask_openai(system_prompt, user_question, response_id)
-        log_data["success"] = True
-        log_data["result"] = result_openai
+@app.command()
+def compare(
+    system_prompt: str,
+    user_question: str,
+    target: list[str] = typer.Option(
+        None,
+        "--target",
+        "-t",
+        help="A provider:model pair to query, e.g. -t openai:gpt-4o-mini. Repeatable.",
+    ),
+):
+    """
+    Ask several providers the same question and show every answer side by side.
 
-        typer.echo("\n==== OpenAI GPT's Response ====\n")
-        typer.echo(f"{result_openai.response_text}\n")
+    Each target makes a real (paid) call, so targets must be given explicitly.
+    """
+    if not target:
+        typer.echo(
+            "[cli.py] Provide at least one --target (e.g. -t openai:gpt-4o-mini "
+            "-t anthropic:claude-haiku-4-5)."
+        )
+        raise typer.Exit(code=1)
 
-    except PaidResponseError as e:
-        # The paid call succeeded but a later step (e.g. cost calc) failed. Judge the run a failure,
-        # yet preserve the response/tokens we already paid for so no billed call goes unlogged.
-        log_data["result"] = e.result
-        log_data["error"] = str(e.original)
-        log_data["error_type"] = type(e.original).__name__
-        typer.echo(f"[cli.py] Partial failure (response preserved): {e.original}")
+    targets: list[tuple[str, str]] = []
+    for raw in target:
+        provider_name, _, model = raw.partition(":")
+        if not provider_name or not model:
+            typer.echo(f"[cli.py] Invalid target '{raw}'. Use provider:model.")
+            raise typer.Exit(code=1)
+        targets.append((provider_name, model))
 
-    except Exception as e:
-        # No usable response was produced (e.g. preflight or API failure). Record the failure metadata.
-        log_data["error"] = str(e)
-        log_data["error_type"] = type(e).__name__
-        typer.echo(f"[cli.py] Error Message: {e}")
+    result = service_ask.compare(system_prompt, user_question, targets)
 
-    finally:
-        log_data["elapsed_sec"] = round(time.perf_counter() - start_time, 3)
-
-    log = LLMCallLog(**log_data)
-
-    # Attatch the created time after the log's name.
-    filename_response_openai = (
-        f"gpt_response_log_{created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
-    )
-
-    # Specify a location to save the log as .jsonl file.
-    jsonl_path_openai = BASE_DIR / "logs" / "OpenAI" / filename_response_openai
-
-    # Save the .jsonl file and store the log in SQLite DB.
-    append_jsonl(str(jsonl_path_openai), log)
-    import_jsonl_to_sqlite(str(jsonl_path_openai), str(DB_PATH))
+    typer.echo(f"\n==== Comparison (run {result.run_id}) ====")
+    for r in result.successes:
+        typer.echo(f"\n---- {r.provider} / {r.model} ----")
+        typer.echo(r.response_text)
+    for f in result.failures:
+        typer.echo(f"\n---- {f.provider} / {f.model} [FAILED: {f.error_type}] ----")
+        typer.echo(f.message)
+        if f.partial_result is not None:
+            typer.echo("(partial response preserved:)")
+            typer.echo(f.partial_result.response_text)
 
 
 @app.command()
 def check_env():
     """
-    Load environment variables from .env file with the checking function defined in env_check.py.
+    Validate .env keys (OpenAI / Anthropic / Gemini); missing keys are warnings.
     """
     check_environment_variables()
 
@@ -101,23 +96,32 @@ def check_env():
 @app.command()
 def list_models():
     """
-    Defining the list-models command. This will list available models from the OpenAI API.
+    List available models across configured providers.
     """
+    from resources.providers import provider_anthropic, provider_openai
+
+    # Google is not yet a wired provider; build a best-effort client just for listing.
+    try:
+        from google import genai
+
+        google_client = genai.Client()
+    except Exception:  # noqa: BLE001 - listing is optional; a missing key disables it.
+        google_client = None
+
     list_available_models(
-        llm_client.client_openai, llm_client.client_anthropic, llm_client.client_google
+        provider_openai._default_client,
+        provider_anthropic._default_client,
+        google_client,
     )
 
 
 @app.command()
 def history(name: str, lastname: str = "", formal: bool = False):
     """
-    Not yet implemented. This command will show the user's history of questions and LLM responses.
+    Not yet implemented. Will show the user's history of questions and LLM responses.
     """
     raise NotImplementedError("History command is not yet implemented.")
 
 
 if __name__ == "__main__":
-    """
-    Run the Typer application, handling commands and accepting user input.
-    """
     app()

@@ -157,22 +157,42 @@ class LLMCallLog(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
+
     run_id: str
+    """UUID for identification of individual LLM response units in LLMCallLog."""
+
     created_at: datetime
+    """Timestamp of when the log entry was created."""
+
     provider: str | None = (
         None  # Which provider was attempted (kept even when the call fails and result is None).
     )
+    """Canonical provider key of the model that generated the response."""
+
     system_prompt: str
+    """System prompt used for the LLM call."""
+
     user_prompt: str
+    """User prompt used for the LLM call."""
+
     success: bool
+    """Indicates whether the LLM call was successful."""
+
     error: str | None = None
+    """Error message if the LLM call failed."""
+
     error_type: str | None = (
         None  # Exception class name, so failed calls stay queryable without parsing the message.
     )
+    """Type of error that occurred."""
+
     elapsed_sec: float | None = (
         None  # Latency in seconds, recorded for both successful and failed attempts.
     )
+    """Elapsed time for the LLM call in seconds."""
+
     result: LLMCallResult | None = None
+    """The result of the LLM call, if successful."""
 
 
 class ErrorInfo(BaseModel):
