@@ -1,4 +1,4 @@
-"""Service-layer orchestration tests (single ask + multi compare)."""
+# Service-layer orchestration tests (single ask + multi compare).
 
 from __future__ import annotations
 

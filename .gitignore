@@ -391,4 +391,4 @@ Thumbs.db
 .venv_py313/
 *.mmd
 .claude/
-CLAUDE.md
+_logs/

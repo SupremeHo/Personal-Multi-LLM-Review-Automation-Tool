@@ -79,12 +79,3 @@ def load_jsonl_file(file_path: str | Path):
 
 def save_jsonl():
     print("temp")
-
-
-# def main():
-#     json_data = load_jsonl_file("resources/logs/OpenAI/gpt_response_log_20260618_175035.jsonl")
-#     print(json_data)
-
-
-# if __name__ == "__main__":
-#     main()

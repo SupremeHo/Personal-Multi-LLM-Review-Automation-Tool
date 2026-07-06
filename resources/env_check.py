@@ -78,11 +78,3 @@ def show_key_values_12_chars(required_vars):
         key_value = os.getenv(env_var)
         key_value_12_chars = key_value[:12] if key_value else "(not set)"
         print(f"\n{env_var}: {key_value_12_chars}")
-
-
-# def main():
-#     check_environment_variables()
-
-
-# if __name__ == "__main__":
-#     main()

@@ -159,12 +159,3 @@ def import_jsonl_to_sqlite(jsonl_path: str, db_path: str) -> None:
         conn.close()
 
     print("Storing model's responses to SQLite DB is now complete.\n")
-
-
-# def main():
-#     import_jsonl_to_sqlite(JSONL_PATH, DB_PATH)
-#     print("Database creation is now complete.")
-
-
-# if __name__ == "__main__":
-#     main()

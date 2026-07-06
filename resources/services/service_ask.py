@@ -23,7 +23,7 @@ from resources.storage_json import append_jsonl
 from resources.storage_sqlite import import_jsonl_to_sqlite
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-DB_PATH = BASE_DIR / "db" / "llm_responses.db"
+DB_PATH = BASE_DIR / "_db" / "llm_responses.db"
 
 # Per-provider on-disk log layout: provider key -> (subdirectory, filename prefix).
 LOG_LAYOUT = {
@@ -113,7 +113,7 @@ def persist_log(log: LLMCallLog) -> None:
         log.provider or "", (log.provider or "unknown", log.provider or "log")
     )
     filename = f"{prefix}_response_log_{log.created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
-    path = BASE_DIR / "logs" / dir_name / filename
+    path = BASE_DIR / "_logs" / dir_name / filename
 
     append_jsonl(str(path), log)
     import_jsonl_to_sqlite(str(path), str(DB_PATH))

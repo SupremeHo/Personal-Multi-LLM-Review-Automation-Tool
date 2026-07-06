@@ -1,4 +1,4 @@
-"""Storage tests: schema-to-DB token mapping and idempotency."""
+# Storage tests: schema-to-DB token mapping and idempotency.
 
 from __future__ import annotations
 
