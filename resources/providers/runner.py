@@ -8,9 +8,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from resources.count_cost import calculate_token_cost, preflight_pricing
 from resources.providers.response_error import PaidResponseError
