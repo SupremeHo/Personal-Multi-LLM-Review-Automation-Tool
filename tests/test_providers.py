@@ -9,8 +9,10 @@ from resources.providers.provider_openai import OpenAIProvider
 from resources.schemas import LLMRequest
 from tests.fakes import (
     fake_anthropic_client,
+    fake_google_client,
     fake_openai_client,
     make_anthropic_response,
+    make_google_response,
     make_openai_response,
     write_price_table,
 )
@@ -25,7 +27,7 @@ def _request(model):
 def test_providers_satisfy_contract():
     assert isinstance(OpenAIProvider(client=object()), ChatProvider)
     assert isinstance(AnthropicProvider(client=object()), ChatProvider)
-    assert isinstance(GoogleProvider(), ChatProvider)
+    assert isinstance(GoogleProvider(client=object()), ChatProvider)
 
 
 def test_openai_provider_maps_response(tmp_path):
@@ -65,8 +67,19 @@ def test_anthropic_provider_maps_response(tmp_path):
     assert result.usage.cache_read_input_tokens == 10
 
 
-def test_google_provider_not_implemented():
-    import pytest
+def test_google_provider_maps_response(tmp_path):
+    price = write_price_table(tmp_path / "g.json", "m")
+    provider = GoogleProvider(
+        client=fake_google_client(make_google_response(model="m")), price_path=price
+    )
+    result = provider.ask(_request("m"))
 
-    with pytest.raises(NotImplementedError):
-        GoogleProvider().ask(_request("gemini-x"))
+    assert result.provider == "google"
+    assert result.response_id == "rid"
+    assert result.response_text == "hi from gemini"
+    assert result.finish_reason == "STOP"
+    assert result.usage.input_tokens == 120
+    assert result.usage.output_tokens == 60
+    assert result.usage.total_tokens == 180
+    assert result.usage.cached_input_tokens == 15
+    assert result.cost is not None
