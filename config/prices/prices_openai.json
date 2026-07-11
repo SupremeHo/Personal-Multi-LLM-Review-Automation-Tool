@@ -2,9 +2,24 @@
     "provider": "OpenAI",
     "currency": "USD",
     "unit": "per_1m_tokens",
-    "updated_at": "2026-05-31",
+    "updated_at": "2026-07-11",
     "source": "https://developers.openai.com/api/docs/pricing",
     "models": {
+        "gpt-5.6-sol": {
+            "input": 5.00,
+            "cached_input": 0.50,
+            "output": 30.00
+        },
+        "gpt-5.6-terra": {
+            "input": 2.50,
+            "cached_input": 0.25,
+            "output": 15.00
+        },
+        "gpt-5.6-luna": {
+            "input": 1.00,
+            "cached_input": 0.10,
+            "output": 6.00
+        },
         "gpt-5.5": {
             "input": 5.00,
             "cached_input": 0.50,

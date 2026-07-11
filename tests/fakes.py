@@ -84,6 +84,30 @@ def fake_anthropic_client(response=None):
     return types.SimpleNamespace(messages=messages)
 
 
+# --- Google (Gemini)-shaped fakes -------------------------------------------
+def make_google_response(model: str = "gemini-test", cached: int = 15):
+    usage = types.SimpleNamespace(
+        prompt_token_count=120,
+        candidates_token_count=60,
+        total_token_count=180,
+        cached_content_token_count=cached,
+    )
+    candidate = types.SimpleNamespace(finish_reason=types.SimpleNamespace(value="STOP"))
+    return types.SimpleNamespace(
+        candidates=[candidate],
+        usage_metadata=usage,
+        model_version=model,
+        response_id="raw-google",
+        text="hi from gemini",
+    )
+
+
+def fake_google_client(response=None):
+    response = response or make_google_response()
+    models = types.SimpleNamespace(generate_content=lambda **kwargs: response)
+    return types.SimpleNamespace(models=models)
+
+
 # --- fake ChatProviders (for registry/service tests) ------------------------
 def make_result(request: LLMRequest, provider: str = "fake", text: str = "ok"):
     return LLMCallResult(

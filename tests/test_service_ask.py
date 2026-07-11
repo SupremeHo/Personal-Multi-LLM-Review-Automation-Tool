@@ -71,5 +71,5 @@ def test_ask_persists_to_db_and_jsonl(monkeypatch, tmp_path, temp_db):
     finally:
         conn.close()
 
-    jsonl_files = list((tmp_path / "logs").rglob("*.jsonl"))
+    jsonl_files = list((tmp_path / "_logs").rglob("*.jsonl"))
     assert len(jsonl_files) == 1

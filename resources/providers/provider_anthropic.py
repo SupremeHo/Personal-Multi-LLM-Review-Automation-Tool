@@ -14,7 +14,7 @@ from resources.providers.runner import ParsedResponse, run_chat
 from resources.schemas import LLMCallResult, LLMRequest, TokenUsageInfo
 
 PRICE_DIR = Path(__file__).resolve().parent.parent.parent / "config" / "prices"
-PRICE_PATH_ANTHROPIC = PRICE_DIR / "prices_anthropic.json"
+PRICE_PATH_ANTHROPIC = PRICE_DIR / "prices_claude.json"
 
 # Constructed at import time; set to None if the key/init fails so a missing key
 # disables this provider instead of crashing the whole tool.

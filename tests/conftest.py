@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-SCHEMA_SQL = (ROOT / "db" / "_create_table.sql").read_text(encoding="utf-8")
+SCHEMA_SQL = (ROOT / "_db" / "_create_table.sql").read_text(encoding="utf-8")
 
 
 @pytest.fixture
