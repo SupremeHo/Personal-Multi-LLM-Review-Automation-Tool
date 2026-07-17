@@ -98,20 +98,12 @@ def list_models():
     """
     List available models across configured providers.
     """
-    from resources.providers import provider_anthropic, provider_openai
-
-    # Google is not yet a wired provider; build a best-effort client just for listing.
-    try:
-        from google import genai
-
-        google_client = genai.Client()
-    except Exception:  # noqa: BLE001 - listing is optional; a missing key disables it.
-        google_client = None
+    from resources.providers import provider_anthropic, provider_google, provider_openai
 
     list_available_models(
         provider_openai._default_client,
         provider_anthropic._default_client,
-        google_client,
+        provider_google._default_client,
     )
 
 
