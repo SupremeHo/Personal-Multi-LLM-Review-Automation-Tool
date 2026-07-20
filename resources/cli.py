@@ -73,7 +73,7 @@ def compare(
 
     result = service_ask.compare(system_prompt, user_question, targets)
 
-    typer.echo(f"\n==== Comparison (run {result.run_id}) ====")
+    typer.echo(f"\n==== Comparison (group {result.group_id}) ====")
     for r in result.successes:
         typer.echo(f"\n---- {r.provider} / {r.model} ----")
         typer.echo(r.response_text)

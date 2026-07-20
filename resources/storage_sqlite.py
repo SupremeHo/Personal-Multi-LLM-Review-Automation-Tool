@@ -21,6 +21,9 @@ def ensure_audit_columns(conn: sqlite3.Connection) -> None:
     if "error_type" not in existing_columns:
         conn.execute("ALTER TABLE runs ADD COLUMN error_type TEXT")
 
+    if "group_id" not in existing_columns:
+        conn.execute("ALTER TABLE runs ADD COLUMN group_id TEXT")
+
 
 def insert_log_record(conn: sqlite3.Connection, json_record: dict) -> None:
     """
@@ -66,13 +69,14 @@ def insert_log_record(conn: sqlite3.Connection, json_record: dict) -> None:
     conn.execute(
         """
         INSERT OR IGNORE INTO runs (
-            run_id, created_at, provider, system_prompt, user_prompt,
+            run_id, group_id, created_at, provider, system_prompt, user_prompt,
             success, error, error_type, elapsed_sec, raw_json
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             run_id,
+            json_record.get("group_id"),
             created_at,
             json_record.get("provider"),
             json_record.get("system_prompt", ""),

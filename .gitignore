@@ -377,6 +377,7 @@ venv/
 # Vector DB · Database files
 .chroma/
 *.sql
+!_create_table.sql
 *.sqlite
 *.db
 chroma_db/

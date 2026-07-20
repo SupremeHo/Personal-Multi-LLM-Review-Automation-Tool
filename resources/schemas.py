@@ -161,6 +161,9 @@ class LLMCallLog(BaseModel):
     run_id: str
     """UUID for identification of individual LLM response units in LLMCallLog."""
 
+    group_id: str | None = None
+    """Shared id tying together the calls of one comparison; None for a single ask."""
+
     created_at: datetime
     """Timestamp of when the log entry was created."""
 

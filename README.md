@@ -93,6 +93,16 @@ Cost is computed **locally** from data files—no extra API calls. Rates live pe
 
 The SQLite file `_db/llm_responses.db` is created/seeded once from `_db/_create_table.sql` (run it with the `sqlite3` CLI or any client). The tool connects to an **existing** DB and only `ALTER`s in missing audit columns—it does not create the tables itself.
 
+`_db/_create_table.sql` is the **single source of truth** for the schema (`_db/llm_responses.db` itself is git-ignored). If you ever delete the database and want to recreate it from scratch, re-seed it from that file—do not restore from an ad-hoc DB-client export, which can silently drift from the tracked schema:
+
+```bash
+# Recreate an empty, correctly-seeded database
+rm _db/llm_responses.db          # optional: remove the old file first
+sqlite3 _db/llm_responses.db < _db/_create_table.sql
+```
+
+The statements use `CREATE TABLE/INDEX IF NOT EXISTS`, so running the file against an existing DB is safe (it only fills in what is missing). In a GUI client (e.g. DB Browser for SQLite), paste the same file into the *Execute SQL* tab and run it.
+
 ### 5. Running the CLI
 
 Run from the **project root** as a module (not `cd resources`). `ask` and `compare` make real (paid) API calls and automatically persist the logs (JSONL) and metadata (SQLite).
@@ -107,7 +117,7 @@ python -m resources.cli ask "<system_prompt>" "<user_question>" \
   --provider anthropic --model claude-haiku-4-5
 ```
 
-**Compare several models side by side** (the core "review" feature)—requires at least one `--target/-t provider:model`, all run under one shared `run_id`:
+**Compare several models side by side** (the core "review" feature)—requires at least one `--target/-t provider:model`. Each call gets its own `run_id`, all tied together by one shared `group_id`:
 
 ```bash
 python -m resources.cli compare "<system_prompt>" "<user_question>" \

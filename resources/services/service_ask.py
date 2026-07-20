@@ -1,8 +1,8 @@
 # Service layer: turns a high-level request into provider calls and audit logs.
 #
 # Responsibilities:
-#   * Own identity generation (run_id, response_id) in one place, then inject it
-#     into the provider request (the provider never mints ids).
+#   * Own identity generation (run_id, group_id, response_id) in one place, then
+#     inject it into the provider request (the provider never mints ids).
 #   * Resolve providers through the registry only (never import a concrete one).
 #   * Turn each call's outcome into data: an LLMCallLog always, plus an ErrorInfo
 #     for failures in the multi-compare flow so one failure never stops the rest.
@@ -55,6 +55,7 @@ def run_request(
     request: LLMRequest,
     provider_name: str,
     created_at: datetime | None = None,
+    group_id: str | None = None,
 ) -> LLMCallLog:
     """
     Execute one provider call and assemble its audit log.
@@ -62,11 +63,14 @@ def run_request(
     The log is built once up front and filled in place, so it is always returned
     - on success, on a salvaged partial failure (PaidResponseError), or on any
     other failure - with elapsed_sec recorded either way.
+
+    `group_id` ties this call to a comparison batch; None for a single ask.
     """
     created_at = created_at or datetime.now()
 
     log_data = {
         "run_id": run_id,
+        "group_id": group_id,
         "created_at": created_at,
         "provider": provider_name,
         "system_prompt": request.system_prompt,
@@ -149,13 +153,14 @@ def ask(
 @dataclass
 class CompareResult:
     """
-    Aggregated outcome of one multi-provider comparison (shared run_id).
+    Aggregated outcome of one multi-provider comparison (shared group_id).
 
+    Each call keeps its own run_id; `group_id` ties them together as one batch.
     `logs` holds every outcome for persistence; `successes`/`failures` split them
     for quorum / cross-validation logic, with failures captured as ErrorInfo values.
     """
 
-    run_id: str
+    group_id: str
     logs: list[LLMCallLog] = field(default_factory=list)
     successes: list[LLMCallResult] = field(default_factory=list)
     failures: list[ErrorInfo] = field(default_factory=list)
@@ -170,7 +175,10 @@ def compare(
     persist: bool = True,
 ) -> CompareResult:
     """
-    Ask several (provider, model) targets the same question under one run_id.
+    Ask several (provider, model) targets the same question under one group_id.
+
+    Each call gets its own run_id (so every attempt is an independent audit row);
+    a shared group_id ties them together as one comparison batch.
 
     A failing provider does not stop the others: each failure is collected as an
     ErrorInfo value (with any salvaged partial result attached) so a partial /
@@ -179,15 +187,17 @@ def compare(
     Args:
       targets: list of (provider_name, selected_model) pairs.
     """
-    run_id = str(uuid4())
+    group_id = str(uuid4())
     created_at = datetime.now()
-    outcome = CompareResult(run_id=run_id)
+    outcome = CompareResult(group_id=group_id)
 
     for provider_name, selected_model in targets:
         request = make_request(
             system_prompt, user_question, selected_model, max_tokens=max_tokens
         )
-        log = run_request(run_id, request, provider_name, created_at)
+        log = run_request(
+            str(uuid4()), request, provider_name, created_at, group_id=group_id
+        )
 
         if persist:
             persist_log(log)

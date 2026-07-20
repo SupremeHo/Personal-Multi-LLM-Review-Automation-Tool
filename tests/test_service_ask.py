@@ -44,8 +44,9 @@ def test_compare_collects_successes_and_failures(fake_providers):
         [("good", "m1"), ("fail", "m2"), ("paidfail", "m3")],
         persist=False,
     )
-    # one shared run_id across all logs
-    assert len({log.run_id for log in result.logs}) == 1
+    # each call has its own run_id, but all share one group_id
+    assert len({log.run_id for log in result.logs}) == 3
+    assert {log.group_id for log in result.logs} == {result.group_id}
     assert len(result.logs) == 3
     assert len(result.successes) == 1
     assert len(result.failures) == 2
@@ -55,6 +56,35 @@ def test_compare_collects_successes_and_failures(fake_providers):
     # PaidResponseError keeps the billed response as data.
     assert by_provider["paidfail"].partial_result is not None
     assert by_provider["paidfail"].partial_result.response_text == "ok"
+
+
+def test_compare_persists_every_call_under_one_group(monkeypatch, tmp_path, temp_db):
+    # Regression: a shared run_id used to collapse compare into a single runs row
+    # (INSERT OR IGNORE on the UNIQUE run_id), losing the other providers - failed
+    # ones vanished entirely. Each call must now leave its own auditable runs row.
+    monkeypatch.setattr(
+        registry,
+        "PROVIDERS",
+        {"good": GoodProvider(), "fail": FailProvider(), "paidfail": PaidFailProvider()},
+    )
+    monkeypatch.setattr(svc, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(svc, "DB_PATH", temp_db)
+
+    result = svc.compare(
+        "s", "q", [("good", "m1"), ("fail", "m2"), ("paidfail", "m3")]
+    )
+
+    conn = sqlite3.connect(temp_db)
+    try:
+        rows = conn.execute("SELECT run_id, group_id FROM runs").fetchall()
+    finally:
+        conn.close()
+
+    # every provider (including the failed one) left a distinct runs row...
+    assert len(rows) == 3
+    assert len({run_id for run_id, _ in rows}) == 3
+    # ...all tied together by the single shared group_id
+    assert {group_id for _, group_id in rows} == {result.group_id}
 
 
 def test_ask_persists_to_db_and_jsonl(monkeypatch, tmp_path, temp_db):

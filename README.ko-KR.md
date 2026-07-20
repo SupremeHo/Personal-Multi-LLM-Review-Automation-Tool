@@ -93,6 +93,16 @@ python -m resources.cli check-env
 
 SQLite 파일 `_db/llm_responses.db`는 `_db/_create_table.sql`로 최초 1회 생성/초기화합니다(`sqlite3` CLI나 임의의 클라이언트로 실행). 도구는 **이미 존재하는** DB에 연결하며, 누락된 감사(audit) 컬럼만 `ALTER`로 추가할 뿐 테이블 자체를 생성하지는 않습니다.
 
+`_db/_create_table.sql`이 스키마의 **유일한 원본(single source of truth)**입니다(`_db/llm_responses.db` 파일 자체는 git에서 제외됨). DB를 삭제하고 처음부터 다시 만들고 싶을 때는 반드시 이 파일로 재시드하세요. DB 클라이언트에서 임의로 내보낸 덤프로 복원하면 추적 중인 스키마와 조용히 어긋날 수 있으므로 사용하지 마세요:
+
+```bash
+# 비어 있고 올바르게 시드된 DB를 재생성
+rm _db/llm_responses.db          # 선택: 기존 파일 먼저 삭제
+sqlite3 _db/llm_responses.db < _db/_create_table.sql
+```
+
+모든 구문이 `CREATE TABLE/INDEX IF NOT EXISTS`라서 기존 DB에 실행해도 안전합니다(누락된 것만 채움). GUI 클라이언트(예: DB Browser for SQLite)에서는 같은 파일 내용을 *Execute SQL* 탭에 붙여넣고 실행하면 됩니다.
+
 ### 5. CLI 실행
 
 **프로젝트 루트**에서 모듈로 실행하세요(`cd resources` 금지). `ask`와 `compare`는 실제(유료) API를 호출하며, 로그(JSONL)와 메타데이터(SQLite)를 자동으로 저장합니다.
@@ -107,7 +117,7 @@ python -m resources.cli ask "<system_prompt>" "<user_question>" \
   --provider anthropic --model claude-haiku-4-5
 ```
 
-**여러 모델을 나란히 비교** (핵심 "리뷰" 기능) — `--target/-t provider:model`을 최소 1개 지정해야 하며, 모두 하나의 공유 `run_id` 아래에서 실행됩니다:
+**여러 모델을 나란히 비교** (핵심 "리뷰" 기능) — `--target/-t provider:model`을 최소 1개 지정해야 하며, 각 호출은 자체 `run_id`를 갖고 하나의 공유 `group_id`로 묶입니다:
 
 ```bash
 python -m resources.cli compare "<system_prompt>" "<user_question>" \
