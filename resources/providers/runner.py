@@ -30,12 +30,15 @@ class ParsedResponse:
     finish_reason: str | None
     raw_response_id: str | None
     usage: TokenUsageInfo
-    cached_input_tokens_for_cost: int = 0
-    """
-    The cached-input token count to feed the (single-rate) cost calculator.
-    Providers map their own cache accounting onto this: OpenAI uses its cached
-    prompt tokens; Anthropic uses cache-read tokens (the discounted ones).
-    """
+
+    uncached_input_tokens: int
+    """Full-price prompt tokens (cache tokens excluded), for the cost calculator."""
+
+    cache_read_tokens: int = 0
+    """Tokens served from cache (discounted). Providers normalize their own count here."""
+
+    cache_write_tokens: int = 0
+    """Tokens written to cache (Anthropic-only premium); zero for other providers."""
 
 
 def run_chat(
@@ -88,9 +91,10 @@ def run_chat(
         cost = calculate_token_cost(
             price_table=price_table,
             model_name=parsed.model,
-            input_tokens=parsed.usage.input_tokens,
+            uncached_input_tokens=parsed.uncached_input_tokens,
             output_tokens=parsed.usage.output_tokens,
-            cached_input_tokens=parsed.cached_input_tokens_for_cost,
+            cache_read_tokens=parsed.cache_read_tokens,
+            cache_write_tokens=parsed.cache_write_tokens,
         )
         # The cost dict keys are kept 1:1 with CostInfo fields, so this maps directly.
         cost_info = CostInfo(**cost)

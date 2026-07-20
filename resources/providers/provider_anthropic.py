@@ -74,12 +74,15 @@ class AnthropicProvider:
             cache_read_input_tokens=cache_read,
         )
 
+        # Anthropic reports cache read/write separately from input_tokens (no overlap),
+        # each billed at its own tier: read is discounted, write is a premium.
         return ParsedResponse(
             model=response.model,
             response_text=text,
             finish_reason=response.stop_reason,  # Anthropic's equivalent of finish_reason
             raw_response_id=getattr(response, "id", None),
             usage=token_usage,
-            # Feed the discounted cache-read tokens to the single-rate cost calculator.
-            cached_input_tokens_for_cost=cache_read or 0,
+            uncached_input_tokens=usage.input_tokens,
+            cache_read_tokens=cache_read or 0,
+            cache_write_tokens=cache_creation or 0,
         )

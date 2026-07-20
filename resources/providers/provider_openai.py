@@ -74,11 +74,14 @@ class OpenAIProvider:
             cached_input_tokens=cached_tokens,
         )
 
+        # OpenAI's prompt_tokens includes the cached portion, so subtract it out.
+        cache_read = cached_tokens or 0
         return ParsedResponse(
             model=response.model,
             response_text=choice.message.content,
             finish_reason=choice.finish_reason,
             raw_response_id=getattr(response, "id", None),
             usage=token_usage,
-            cached_input_tokens_for_cost=cached_tokens or 0,
+            uncached_input_tokens=max(usage.prompt_tokens - cache_read, 0),
+            cache_read_tokens=cache_read,
         )

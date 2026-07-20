@@ -72,6 +72,8 @@ class GoogleProvider:
             cached_input_tokens=cached_tokens,
         )
 
+        # Gemini's prompt_token_count includes the cached portion, so subtract it out.
+        cache_read = cached_tokens or 0
         finish_reason = candidate.finish_reason
         return ParsedResponse(
             model=response.model_version,
@@ -79,5 +81,6 @@ class GoogleProvider:
             finish_reason=finish_reason.value if finish_reason else None,
             raw_response_id=getattr(response, "response_id", None),
             usage=token_usage,
-            cached_input_tokens_for_cost=cached_tokens or 0,
+            uncached_input_tokens=max(usage.prompt_token_count - cache_read, 0),
+            cache_read_tokens=cache_read,
         )
