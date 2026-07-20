@@ -26,7 +26,7 @@ def _parsed(model="test-model"):
         finish_reason="stop",
         raw_response_id="raw",
         usage=TokenUsageInfo(input_tokens=10, output_tokens=5, total_tokens=15),
-        cached_input_tokens_for_cost=0,
+        uncached_input_tokens=10,
     )
 
 

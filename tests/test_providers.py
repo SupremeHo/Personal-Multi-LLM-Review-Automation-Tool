@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from resources.providers.base_provider import ChatProvider
 from resources.providers.provider_anthropic import AnthropicProvider
 from resources.providers.provider_google import GoogleProvider
@@ -65,6 +67,30 @@ def test_anthropic_provider_maps_response(tmp_path):
     assert result.usage.total_tokens is None  # Anthropic omits a total
     assert result.usage.cache_creation_input_tokens == 30
     assert result.usage.cache_read_input_tokens == 10
+
+
+def test_anthropic_cost_uses_split_cache_tiers(tmp_path):
+    # Regression: Anthropic pricing has separate cache_read/cache_write tiers and
+    # no `cached_input` key, and its input_tokens already excludes cache tokens.
+    # Cost must bill both tiers and must NOT subtract cache from input_tokens.
+    price = write_price_table(
+        tmp_path / "a.json",
+        "m",
+        extra_rates={"cache_read": 0.1, "cache_write_5m": 1.25},
+    )
+    provider = AnthropicProvider(
+        client=fake_anthropic_client(make_anthropic_response(model="m")),
+        price_path=price,
+    )
+    result = provider.ask(_request("m"))
+
+    # input_tokens=200 billed in full (no subtraction), output=80
+    assert result.cost.input_usd == pytest.approx(200 / 1_000_000 * 1.0)
+    assert result.cost.output_usd == pytest.approx(80 / 1_000_000 * 2.0)
+    # cache_read=10 @0.1 + cache_write=30 @1.25 (both tiers counted, folded to one field)
+    assert result.cost.cached_input_usd == pytest.approx(
+        10 / 1_000_000 * 0.1 + 30 / 1_000_000 * 1.25
+    )
 
 
 def test_google_provider_maps_response(tmp_path):

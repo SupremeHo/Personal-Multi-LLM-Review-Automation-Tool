@@ -108,32 +108,49 @@ def to_decimal(value: int | float | str | None) -> Decimal | None:
 def calculate_token_cost(
     price_table: dict,
     model_name: str,
-    input_tokens: int,
+    *,
+    uncached_input_tokens: int,
     output_tokens: int,
-    cached_input_tokens: int = 0,
+    cache_read_tokens: int = 0,
+    cache_write_tokens: int = 0,
 ) -> dict:
     """
-    Calculate the cost of an API call based on the model's pricing and the number of tokens used.
-    Handle both normal input tokens and cached input tokens, applying the appropriate rates for each.
+    Calculate the cost of an API call from three non-overlapping input token
+    buckets, each billed at its own rate, plus output tokens.
+
+    Callers (providers) normalize their own cache accounting into these buckets,
+    so this function needs no per-provider branching:
+
+      * ``uncached_input_tokens`` - full-price prompt tokens (``input`` rate).
+      * ``cache_read_tokens``     - tokens served from cache, discounted. The rate
+        is named ``cache_read`` (Anthropic) or ``cached_input`` (OpenAI/Gemini).
+      * ``cache_write_tokens``    - tokens written to cache, an Anthropic-only
+        premium (``cache_write_5m`` rate); zero/absent for other providers.
+
+    The cache tiers are folded into a single ``cached_input_usd`` in the result
+    so the cost schema stays flat; ``total_usd`` is always the sum of all tiers.
     """
     price = resolve_model_entry(price_table, model_name)
 
     input_rate = to_decimal(price["input"])
-    cached_input_rate = to_decimal(price.get("cached_input"))
     output_rate = to_decimal(price["output"])
+    # Cache-read rate: `cache_read` (Anthropic) or `cached_input` (OpenAI/Gemini).
+    read_rate_raw = price.get("cache_read")
+    if read_rate_raw is None:
+        read_rate_raw = price.get("cached_input")
+    cache_read_rate = to_decimal(read_rate_raw)
+    # Cache-write (prompt-cache creation) is an Anthropic-only premium; default 5m TTL.
+    cache_write_rate = to_decimal(price.get("cache_write_5m"))
 
-    normal_input_tokens = max(input_tokens - cached_input_tokens, 0)
-
-    input_cost = Decimal(normal_input_tokens) / Decimal(1_000_000) * input_rate
+    million = Decimal(1_000_000)
+    input_cost = Decimal(uncached_input_tokens) / million * input_rate
+    output_cost = Decimal(output_tokens) / million * output_rate
 
     cached_input_cost = Decimal("0")
-
-    if cached_input_tokens > 0 and cached_input_rate is not None:
-        cached_input_cost = (
-            Decimal(cached_input_tokens) / Decimal(1_000_000) * cached_input_rate
-        )
-
-    output_cost = Decimal(output_tokens) / Decimal(1_000_000) * output_rate
+    if cache_read_tokens > 0 and cache_read_rate is not None:
+        cached_input_cost += Decimal(cache_read_tokens) / million * cache_read_rate
+    if cache_write_tokens > 0 and cache_write_rate is not None:
+        cached_input_cost += Decimal(cache_write_tokens) / million * cache_write_rate
 
     total_cost = input_cost + cached_input_cost + output_cost
 

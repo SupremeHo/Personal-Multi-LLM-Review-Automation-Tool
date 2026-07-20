@@ -18,18 +18,26 @@ def write_price_table(
     input_rate: float = 1.0,
     output_rate: float = 2.0,
     cached_rate: float = 0.5,
+    extra_rates: dict | None = None,
 ) -> Path:
-    """Write a minimal price table JSON for one model and return its path."""
+    """
+    Write a minimal price table JSON for one model and return its path.
+
+    Pass ``extra_rates`` to add provider-specific keys (e.g. Anthropic's
+    ``cache_read`` / ``cache_write_5m``) to the model entry.
+    """
+    entry = {
+        "input": input_rate,
+        "cached_input": cached_rate,
+        "output": output_rate,
+    }
+    if extra_rates:
+        entry.update(extra_rates)
+
     data = {
         "updated_at": "2099-01-01",  # far future so the >30-day notice never fires
         "source": "test",
-        "models": {
-            model: {
-                "input": input_rate,
-                "cached_input": cached_rate,
-                "output": output_rate,
-            }
-        },
+        "models": {model: entry},
     }
     path.write_text(json.dumps(data), encoding="utf-8")
     return path
