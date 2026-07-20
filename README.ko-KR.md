@@ -25,7 +25,7 @@
 * **언어:** Python 3.12 / 3.13 (100%)
 * **CLI 프레임워크:** [Typer](https://typer.tiangolo.com/) (타입 힌트 기반의 빠른 CLI 생성)
 * **데이터 검증:** Pydantic (`extra="forbid"` 적용, 프로바이더 중립적인 엄격한 스키마)
-* **프로바이더:** OpenAI ✅, Anthropic ✅, Google/Gemini 🚧 (스텁)
+* **프로바이더:** OpenAI ✅, Anthropic ✅, Google/Gemini ✅
 * **데이터베이스:** SQLite3 (로컬 로깅 및 분석 쿼리용)
 * **환경 관리:** `venv` + `python-dotenv`를 통한 안전한 API 키 처리
 
@@ -141,7 +141,7 @@ cli.py                                      # 얇은 Typer 계층: 인자 파싱
 * **`cli.py`** — 얇은 Typer 계층. 인자를 파싱해 서비스 계층에 위임하고 결과를 렌더링합니다.
 * **`services/service_ask.py`** — 오케스트레이션. `run_id`/`response_id`를 발급하고, 프로바이더를 해석하며, 감사 로그를 구성하고, `compare` 실패를 데이터로 수집한 뒤 저장합니다.
 * **`providers/registry.py`** — 프로바이더 이름을 구체 `ChatProvider`에 매핑하는 유일한 지점입니다.
-* **`providers/provider_*.py`** — 프로바이더별 API 특성(OpenAI, Anthropic; Google은 스텁).
+* **`providers/provider_*.py`** — 프로바이더별 API 특성(OpenAI, Anthropic, Google).
 * **`providers/runner.py`** — 공통 채팅 파이프라인(preflight → 유료 호출 → 파싱 → 최선의 비용 계산 → 결과 조립). 각 프로바이더는 `_call_api`와 `_parse_response` 콜백만 제공합니다.
 * **`schemas.py`** — 엄격하고 프로바이더 중립적인 Pydantic 모델(`LLMRequest`, `LLMCallResult`, `LLMCallLog` 등).
 * **`storage_json.py` & `storage_sqlite.py`** — JSONL 및 SQLite로의 데이터 영속화.
@@ -161,7 +161,7 @@ python -m pytest
 
 현재는 개인 MVP이므로 핵심 로직에 대한 직접적인 풀 리퀘스트는 제한될 수 있습니다. 다만 아래 영역의 기여와 포크는 언제든 환영합니다:
 
-1. **새 프로바이더 추가:** Google/Gemini 프로바이더 완성, 또는 `LocalLLMProvider`(예: Ollama) 구현.
+1. **새 프로바이더 추가:** `LocalLLMProvider`(예: Ollama) 구현, 또는 다른 클라우드 프로바이더 추가.
 2. **평가용 프롬프트:** 여러 모델 답변 간의 충돌을 감지하고 누락된 인용을 부각하는 프롬프트 개선.
 3. **비용 분석:** 시간에 따른 모델별 비용 효율을 분석하는 SQL 뷰나 Pandas 스크립트 작성.
 

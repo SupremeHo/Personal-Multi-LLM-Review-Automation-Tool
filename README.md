@@ -25,7 +25,7 @@ This project starts as a personal research automation tool to assist with busine
 * **Language:** Python 3.12 / 3.13 (100%)
 * **CLI Framework:** [Typer](https://typer.tiangolo.com/) (For rapid, type-hinted CLI generation)
 * **Data Validation:** Pydantic (Strict, provider-neutral schemas with `extra="forbid"`)
-* **Providers:** OpenAI ✅, Anthropic ✅, Google/Gemini 🚧 (stub)
+* **Providers:** OpenAI ✅, Anthropic ✅, Google/Gemini ✅
 * **Database:** SQLite3 (For local logging and analytical queries)
 * **Environment Management:** `venv` with `python-dotenv` for secure API key handling
 
@@ -141,7 +141,7 @@ cli.py                                      # thin Typer layer: parse args → d
 * **`cli.py`** — thin Typer layer; parses arguments, delegates to the service layer, renders results.
 * **`services/service_ask.py`** — orchestration: mints `run_id`/`response_id`, resolves providers, builds the audit log, collects `compare` failures as data, and persists.
 * **`providers/registry.py`** — the only place that maps a provider name to a concrete `ChatProvider`.
-* **`providers/provider_*.py`** — per-provider API specifics (OpenAI, Anthropic; Google is a stub).
+* **`providers/provider_*.py`** — per-provider API specifics (OpenAI, Anthropic, Google).
 * **`providers/runner.py`** — the shared chat pipeline (preflight → paid call → parse → best-effort cost → assemble); each provider only supplies `_call_api` and `_parse_response` callbacks.
 * **`schemas.py`** — strict, provider-neutral Pydantic models (`LLMRequest`, `LLMCallResult`, `LLMCallLog`, etc.).
 * **`storage_json.py` & `storage_sqlite.py`** — data persistence to JSONL and SQLite.
@@ -161,7 +161,7 @@ python -m pytest
 
 Since this is currently a personal MVP, direct pull requests to the core logic may be limited. However, contributions and forks are highly welcome in the following areas:
 
-1. **Adding New Providers:** Completing the Google/Gemini provider, or implementing a `LocalLLMProvider` (e.g., Ollama).
+1. **Adding New Providers:** Implementing a `LocalLLMProvider` (e.g., Ollama), or adding other cloud providers.
 2. **Evaluator Prompts:** Enhancing the prompts used to detect conflicts and highlight missing citations across model answers.
 3. **Cost Analytics:** Creating SQL views or Pandas scripts to analyze model cost-efficiency over time.
 
