@@ -101,7 +101,7 @@ rm _db/llm_responses.db          # 선택: 기존 파일 먼저 삭제
 sqlite3 _db/llm_responses.db < _db/_create_table.sql
 ```
 
-모든 구문이 `CREATE TABLE/INDEX IF NOT EXISTS`라서 기존 DB에 실행해도 안전합니다(누락된 것만 채움). GUI 클라이언트(예: DB Browser for SQLite)에서는 같은 파일 내용을 *Execute SQL* 탭에 붙여넣고 실행하면 됩니다.
+모든 구문이 `CREATE TABLE/INDEX IF NOT EXISTS`라서 기존 DB에 실행해도 안전합니다(누락된 것만 채움). GUI 클라이언트(예: DB Browser for SQLite)에서는 같은 파일 내용을 **Execute SQL** 탭에 붙여넣고 실행하면 됩니다.
 
 ### 5. CLI 실행
 
@@ -129,7 +129,9 @@ python -m resources.cli compare "<system_prompt>" "<user_question>" \
 ```bash
 python -m resources.cli check-env      # .env 키 검증 (대화형)
 python -m resources.cli list-models    # 설정된 프로바이더별 모델 목록
-# `history`는 선언되어 있으나 아직 미구현
+python -m resources.cli history        # 최근 호출 조회 (최신순)
+python -m resources.cli history -n 20              # 최근 20건 조회
+python -m resources.cli history --group <group_id> # 한 비교(compare)의 호출들만 조회
 ```
 
 * **`system_prompt`**은 LLM이 어떻게 응답할지 미리 규정하는 지시문입니다.

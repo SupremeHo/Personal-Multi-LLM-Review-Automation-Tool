@@ -107,12 +107,49 @@ def list_models():
     )
 
 
+def _snippet(text: str | None, width: int = 80) -> str:
+    """Collapse whitespace and truncate to a single short line for listing."""
+    if not text:
+        return ""
+    one_line = " ".join(text.split())
+    return one_line if len(one_line) <= width else one_line[: width - 3] + "..."
+
+
+def _render_history_entry(log) -> None:
+    """Print one past call as a compact, newest-first history line."""
+    ts = log.created_at.strftime("%Y-%m-%d %H:%M:%S")
+    if log.success and log.result is not None:
+        cost = log.result.cost.total_usd if log.result.cost else None
+        cost_str = f"${cost:.4f}" if cost is not None else "-"
+        typer.echo(f"\n[{ts}] {log.provider}/{log.result.model}  OK  {cost_str}")
+        typer.echo(f"  Q: {_snippet(log.user_prompt)}")
+        typer.echo(f"  A: {_snippet(log.result.response_text)}")
+    else:
+        typer.echo(f"\n[{ts}] {log.provider}  FAILED: {log.error_type}")
+        typer.echo(f"  Q: {_snippet(log.user_prompt)}")
+
+
 @app.command()
-def history(name: str, lastname: str = "", formal: bool = False):
+def history(
+    limit: int = typer.Option(
+        10, "--limit", "-n", help="How many recent calls to show."
+    ),
+    group: str = typer.Option(
+        None, "--group", "-g", help="Show only calls from this comparison group_id."
+    ),
+):
     """
-    Not yet implemented. Will show the user's history of questions and LLM responses.
+    Show recent questions and their LLM responses from the audit log (newest first).
     """
-    raise NotImplementedError("History command is not yet implemented.")
+    logs = service_ask.read_history(limit, group)
+    if not logs:
+        typer.echo("[cli.py] No history yet.")
+        raise typer.Exit()
+
+    header = f"History (latest {len(logs)})" if group is None else f"History for group {group}"
+    typer.echo(f"\n==== {header} ====")
+    for log in logs:
+        _render_history_entry(log)
 
 
 if __name__ == "__main__":

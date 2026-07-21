@@ -110,6 +110,16 @@ def persist_log(log: LLMCallLog) -> None:
     default_repository(BASE_DIR, DB_PATH).save(log)
 
 
+def read_history(limit: int = 10, group_id: str | None = None) -> list[LLMCallLog]:
+    """
+    Read the most recent audit logs (newest first) via the default repository.
+
+    Pass group_id to see only the calls of one comparison. Built from the module
+    paths on each call, mirroring persist_log so tests can redirect DB_PATH.
+    """
+    return default_repository(BASE_DIR, DB_PATH).recent(limit, group_id)
+
+
 def ask(
     system_prompt: str,
     user_question: str,

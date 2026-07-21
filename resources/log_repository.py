@@ -47,6 +47,17 @@ class LogWriter(Protocol):
     def write(self, log: LLMCallLog) -> None: ...
 
 
+class LogReader(Protocol):
+    """
+    Structural contract for reading audit logs back.
+
+    Reads come from a single structured store (SQLite), not from every sink, so
+    the reader is separate from the writers.
+    """
+
+    def recent(self, limit: int = 10, group_id: str | None = None) -> list[LLMCallLog]: ...
+
+
 class JsonlLogWriter:
     """Append each log to a per-provider JSONL file under ``<base_dir>/_logs/``."""
 
@@ -89,17 +100,61 @@ class SqliteLogWriter:
             conn.close()
 
 
-class LogRepository:
-    """Fan one audit log out to every configured writer, in order."""
+class SqliteLogReader:
+    """
+    Read recent audit logs back from SQLite, newest first.
 
-    def __init__(self, writers: list[LogWriter]):
+    Each ``runs`` row stores the full log record in ``raw_json``, so a log is
+    reconstructed straight into an LLMCallLog - no per-column re-mapping, and
+    failed calls (which have a runs row but no model_responses) come back too.
+    """
+
+    def __init__(self, db_path: str | Path):
+        self._db_path = str(db_path)
+
+    def recent(self, limit: int = 10, group_id: str | None = None) -> list[LLMCallLog]:
+        # Order by the autoincrement id (insertion order) so ties within the same
+        # created_at second - e.g. calls of one compare - stay deterministic.
+        if group_id is None:
+            sql = "SELECT raw_json FROM runs ORDER BY id DESC LIMIT ?"
+            params: tuple = (limit,)
+        else:
+            sql = "SELECT raw_json FROM runs WHERE group_id = ? ORDER BY id DESC LIMIT ?"
+            params = (group_id, limit)
+
+        conn = sqlite3.connect(self._db_path)
+        try:
+            rows = conn.execute(sql, params).fetchall()
+        finally:
+            conn.close()
+
+        return [LLMCallLog.model_validate_json(row[0]) for row in rows]
+
+
+class LogRepository:
+    """
+    Persistence facade: fan writes out to every writer, and delegate reads to
+    the reader. Reads require a reader (built by default_repository); a
+    writers-only repository raises if queried.
+    """
+
+    def __init__(self, writers: list[LogWriter], reader: LogReader | None = None):
         self._writers = writers
+        self._reader = reader
 
     def save(self, log: LLMCallLog) -> None:
         for writer in self._writers:
             writer.write(log)
 
+    def recent(self, limit: int = 10, group_id: str | None = None) -> list[LLMCallLog]:
+        if self._reader is None:
+            raise RuntimeError("[log_repository.py] This repository has no reader.")
+        return self._reader.recent(limit, group_id)
+
 
 def default_repository(base_dir: Path, db_path: str | Path) -> LogRepository:
-    """Production wiring: JSONL archive first, then SQLite."""
-    return LogRepository([JsonlLogWriter(base_dir), SqliteLogWriter(db_path)])
+    """Production wiring: JSONL archive first, then SQLite, with a SQLite reader."""
+    return LogRepository(
+        [JsonlLogWriter(base_dir), SqliteLogWriter(db_path)],
+        reader=SqliteLogReader(db_path),
+    )
