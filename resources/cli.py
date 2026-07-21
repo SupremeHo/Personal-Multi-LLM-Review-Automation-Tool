@@ -35,6 +35,8 @@ def ask(
 ):
     """
     Ask a single provider/model a question; logs to JSONL + SQLite.
+
+    Defaults to OpenAI gpt-4o-mini if no provider/model is specified. The system prompt is optional but recommended.
     """
     log = service_ask.ask(system_prompt, user_question, provider, model)
     _render_log(log)
@@ -118,15 +120,23 @@ def _snippet(text: str | None, width: int = 80) -> str:
 def _render_history_entry(log) -> None:
     """Print one past call as a compact, newest-first history line."""
     ts = log.created_at.strftime("%Y-%m-%d %H:%M:%S")
+
+    ok = typer.style("OK", fg=typer.colors.GREEN, bold=True)
+    fail = typer.style("FAILED", fg=typer.colors.RED, bold=True)
+    q = typer.style(">> Q", fg=typer.colors.CYAN, bold=True)
+    a = typer.style(">> A", fg=typer.colors.CYAN, bold=True)
+    e = typer.style(">> Error", fg=typer.colors.RED, bold=True)
+
     if log.success and log.result is not None:
         cost = log.result.cost.total_usd if log.result.cost else None
-        cost_str = f"${cost:.4f}" if cost is not None else "-"
-        typer.echo(f"\n[{ts}] {log.provider}/{log.result.model}  OK  {cost_str}")
-        typer.echo(f"  Q: {_snippet(log.user_prompt)}")
-        typer.echo(f"  A: {_snippet(log.result.response_text)}")
+        cost_str = f"${cost:.6f}" if cost is not None else "-"
+        typer.echo(f"\n[{ts}] {log.provider}/{log.result.model}  {ok}  {cost_str}")
+        typer.echo(f"{q}: {_snippet(log.user_prompt)}")
+        typer.echo(f"{a}: {_snippet(log.result.response_text)}")
     else:
-        typer.echo(f"\n[{ts}] {log.provider}  FAILED: {log.error_type}")
-        typer.echo(f"  Q: {_snippet(log.user_prompt)}")
+        typer.echo(f"\n[{ts}] {log.provider}  {fail}")
+        typer.echo(f"{q}: {_snippet(log.user_prompt)}")
+        typer.echo(f"{e}: {_snippet(log.error_type)}")
 
 
 @app.command()
@@ -143,11 +153,17 @@ def history(
     """
     logs = service_ask.read_history(limit, group)
     if not logs:
-        typer.echo("[cli.py] No history yet.")
+        typer.echo("\n>>> [cli.py] No history yet.")
         raise typer.Exit()
 
-    header = f"History (latest {len(logs)})" if group is None else f"History for group {group}"
-    typer.echo(f"\n==== {header} ====")
+    header = (
+        f"History (latest {len(logs)})"
+        if group is None
+        else f"History for group {group}"
+    )
+
+    typer.secho(f"\n==== {header} ====", fg=typer.colors.BRIGHT_CYAN, bold=True)
+
     for log in logs:
         _render_history_entry(log)
 

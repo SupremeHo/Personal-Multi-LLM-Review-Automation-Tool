@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from resources.count_cost import calculate_token_cost, preflight_pricing
+from resources.diagnostics import print_error
 from resources.providers.response_error import PaidResponseError
 from resources.schemas import CostInfo, LLMCallResult, LLMRequest, TokenUsageInfo
 
@@ -69,8 +70,11 @@ def run_chat(
     """
     if client is None:
         raise RuntimeError(
-            f"[runner.py] Error Message: '{provider_name}' client is unavailable. "
-            f"Check the API key and the environment setup.\n"
+            print_error(
+                f"'{provider_name}' client is unavailable. Check the API key and the environment setup",
+                module="runner.py",
+                func="run_chat",
+            )
         )
 
     # Preflight: validate the price table and model name BEFORE the paid call so a
@@ -100,9 +104,10 @@ def run_chat(
         cost_info = CostInfo(**cost)
     except Exception as e:  # noqa: BLE001 - any cost failure must not discard the paid response.
         cost_error = e
-        print(
-            f"[runner.py] Error Message: Cost calculation failed after billing "
-            f"({provider_name}) - {e}\n"
+        print_error(
+            f"Cost calculation failed after billing ({provider_name}) - {e}",
+            module="runner.py",
+            func="run_chat",
         )
 
     result = LLMCallResult(

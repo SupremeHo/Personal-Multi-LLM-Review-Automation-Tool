@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from resources.diagnostics import print_error
 from resources.providers.base_provider import ChatProvider
 from resources.providers.provider_anthropic import AnthropicProvider
 from resources.providers.provider_google import GoogleProvider
@@ -32,5 +33,9 @@ def get_provider(provider_name: str) -> ChatProvider:
     except KeyError:
         known = ", ".join(sorted(PROVIDERS))
         raise KeyError(
-            f"[registry.py] Unknown provider '{provider_name}'. Known providers: {known}."
+            print_error(
+                f"Unknown provider '{provider_name}'. Known providers: {known}",
+                module="registry.py",
+                func="get_provider",
+            )
         ) from None

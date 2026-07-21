@@ -55,7 +55,9 @@ class LogReader(Protocol):
     the reader is separate from the writers.
     """
 
-    def recent(self, limit: int = 10, group_id: str | None = None) -> list[LLMCallLog]: ...
+    def recent(
+        self, limit: int = 10, group_id: str | None = None
+    ) -> list[LLMCallLog]: ...
 
 
 class JsonlLogWriter:
@@ -119,7 +121,9 @@ class SqliteLogReader:
             sql = "SELECT raw_json FROM runs ORDER BY id DESC LIMIT ?"
             params: tuple = (limit,)
         else:
-            sql = "SELECT raw_json FROM runs WHERE group_id = ? ORDER BY id DESC LIMIT ?"
+            sql = (
+                "SELECT raw_json FROM runs WHERE group_id = ? ORDER BY id DESC LIMIT ?"
+            )
             params = (group_id, limit)
 
         conn = sqlite3.connect(self._db_path)
