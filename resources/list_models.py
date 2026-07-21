@@ -9,6 +9,10 @@ from anthropic import Anthropic, AnthropicError
 from google import genai
 from google.genai import errors
 from openai import OpenAI, OpenAIError
+from rich.console import Console
+from rich.text import Text
+
+console = Console()
 
 
 def _list_models(
@@ -25,6 +29,7 @@ def _list_models(
     model id is extracted/filtered (`extract` returns the name to print, or None
     to skip), so the listing logic itself is written once here.
     """
+
     if client is None:
         print(
             f"Error Message: {label} client is unavailable. Check that the API key is set."
@@ -33,15 +38,15 @@ def _list_models(
 
     try:
         models = client.models.list()
-        print("\n" + f"======== Available {label}'s Models ========")
+        console.print(f"\n======== Available {label}'s Models ========\n")
         for model in models:
             name = extract(model)
             if name is not None:
-                print(name)
-        print(f"======== Finished listing {label}'s Models list ========\n")
+                console.print(Text(name, style="cyan"))
+        console.print(f"\n======== Finished listing {label}'s Models ========\n")
 
     except error_type as e:
-        print(f"Error Message: Failed to list {label}'s models: {e}")
+        console.print(f"Error Message: Failed to list {label}'s models: {e}")
         raise
 
 
@@ -74,11 +79,11 @@ def list_available_models(
 
     while True:
         try:
-            print(
+            console.print(
                 "\nWould you like to list the available API's models? Please select and enter one of the three companies. (OpenAI, Anthropic, or Google)"
             )
 
-            answer = input(
+            answer = console.input(
                 "If you want to check the all available models, input the word 'Yes'. If you want to skip, input the word 'No': "
             ).lower()
 
@@ -90,10 +95,10 @@ def list_available_models(
                     lister()
                 break
             elif answer == "no":
-                print("\nSkipping model listing...\n")
+                console.print("\nSkipping model listing...\n")
                 break
             else:
-                print("\nPlease enter your input correctly.")
+                console.print("\nPlease enter your input correctly.\n")
                 continue
 
         except EOFError:

@@ -101,7 +101,7 @@ rm _db/llm_responses.db          # optional: remove the old file first
 sqlite3 _db/llm_responses.db < _db/_create_table.sql
 ```
 
-The statements use `CREATE TABLE/INDEX IF NOT EXISTS`, so running the file against an existing DB is safe (it only fills in what is missing). In a GUI client (e.g. DB Browser for SQLite), paste the same file into the *Execute SQL* tab and run it.
+The statements use `CREATE TABLE/INDEX IF NOT EXISTS`, so running the file against an existing DB is safe (it only fills in what is missing). In a GUI client (e.g. DB Browser for SQLite), paste the same file into the **Execute SQL** tab and run it.
 
 ### 5. Running the CLI
 
@@ -129,7 +129,9 @@ python -m resources.cli compare "<system_prompt>" "<user_question>" \
 ```bash
 python -m resources.cli check-env      # validate .env keys (interactive)
 python -m resources.cli list-models    # list models across configured providers
-# `history` is declared but not yet implemented
+python -m resources.cli history        # show recent calls (newest first)
+python -m resources.cli history -n 20              # show the last 20 calls
+python -m resources.cli history --group <group_id> # show one comparison's calls
 ```
 
 * **`system_prompt`** is an instruction that predetermines how the LLM should respond.

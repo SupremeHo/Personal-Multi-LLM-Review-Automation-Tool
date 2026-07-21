@@ -16,21 +16,13 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+from resources.log_repository import default_repository
 from resources.providers.registry import get_provider
 from resources.providers.response_error import PaidResponseError
 from resources.schemas import ErrorInfo, LLMCallLog, LLMCallResult, LLMRequest
-from resources.storage_json import append_jsonl
-from resources.storage_sqlite import import_jsonl_to_sqlite
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DB_PATH = BASE_DIR / "_db" / "llm_responses.db"
-
-# Per-provider on-disk log layout: provider key -> (subdirectory, filename prefix).
-LOG_LAYOUT = {
-    "openai": ("OpenAI", "gpt"),
-    "anthropic": ("Anthropic", "claude"),
-    "google": ("Google", "gemini"),
-}
 
 
 def make_request(
@@ -108,19 +100,24 @@ def run_request(
 
 def persist_log(log: LLMCallLog) -> None:
     """
-    Archive one audit log to a per-provider JSONL file and into SQLite.
+    Archive one audit log through the default repository (JSONL + SQLite).
 
     The log is always written - success or failure - so every run, including
-    billed-but-failed ones, leaves an auditable record.
+    billed-but-failed ones, leaves an auditable record. The repository is built
+    from the current module paths on each call so tests can redirect BASE_DIR /
+    DB_PATH before persisting.
     """
-    dir_name, prefix = LOG_LAYOUT.get(
-        log.provider or "", (log.provider or "unknown", log.provider or "log")
-    )
-    filename = f"{prefix}_response_log_{log.created_at.strftime('%Y%m%d_%H%M%S')}.jsonl"
-    path = BASE_DIR / "_logs" / dir_name / filename
+    default_repository(BASE_DIR, DB_PATH).save(log)
 
-    append_jsonl(str(path), log)
-    import_jsonl_to_sqlite(str(path), str(DB_PATH))
+
+def read_history(limit: int = 10, group_id: str | None = None) -> list[LLMCallLog]:
+    """
+    Read the most recent audit logs (newest first) via the default repository.
+
+    Pass group_id to see only the calls of one comparison. Built from the module
+    paths on each call, mirroring persist_log so tests can redirect DB_PATH.
+    """
+    return default_repository(BASE_DIR, DB_PATH).recent(limit, group_id)
 
 
 def ask(

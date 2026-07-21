@@ -103,3 +103,16 @@ def test_ask_persists_to_db_and_jsonl(monkeypatch, tmp_path, temp_db):
 
     jsonl_files = list((tmp_path / "_logs").rglob("*.jsonl"))
     assert len(jsonl_files) == 1
+
+
+def test_read_history_returns_persisted_calls(monkeypatch, tmp_path, temp_db):
+    monkeypatch.setattr(registry, "PROVIDERS", {"good": GoodProvider()})
+    monkeypatch.setattr(svc, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(svc, "DB_PATH", temp_db)
+
+    svc.ask("s", "q", "good", "m")  # persisted via the default repository
+
+    logs = svc.read_history(limit=5)
+    assert len(logs) == 1
+    assert logs[0].provider == "good"
+    assert logs[0].result.response_text == "ok"
