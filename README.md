@@ -2,6 +2,7 @@
 
 ![Language](https://img.shields.io/badge/Language-Python_100%25-blue)
 ![Status](https://img.shields.io/badge/Status-MVP-brightgreen)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 > 🇰🇷 한국어 문서는 [README.ko-KR.md](README.ko-KR.md)를 참고하세요.
 

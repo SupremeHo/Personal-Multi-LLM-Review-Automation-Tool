@@ -2,6 +2,7 @@
 
 ![Language](https://img.shields.io/badge/Language-Python_100%25-blue)
 ![Status](https://img.shields.io/badge/Status-MVP-brightgreen)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 > 🇬🇧 English documentation is available in [README.md](README.md).
 

@@ -2,6 +2,8 @@
 name = "Personal Multi-LLM Review Automation Tool"
 description = "A multi-LLM platform that automates cross-validation of answers from multiple LLMs."
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 
 [project.urls]
 Homepage = "https://github.com/SupremeHo/Personal-Multi-LLM-Review-Automation-Tool"
