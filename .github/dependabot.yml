@@ -1,0 +1,45 @@
+# Dependabot version updates.
+# Reference: https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+version: 2
+
+updates:
+  # Picks up every requirements file in the repo root:
+  #   requirements_py312_win.txt, requirements_py313_win.txt, requirements_dev_win.txt
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    # Groups are matched top to bottom; a dependency joins the first group it matches.
+    groups:
+      # LLM provider SDKs: the highest-risk surface, reviewed together in one PR.
+      llm-sdks:
+        patterns:
+          - "anthropic"
+          - "openai"
+          - "google-genai"
+          - "google-auth*"
+          - "ollama"
+      # Test and lint toolchain.
+      dev-tools:
+        patterns:
+          - "pytest*"
+          - "ruff"
+          - "pluggy"
+          - "iniconfig"
+      # Everything else, patch/minor only. Major bumps stay as individual PRs
+      # so breaking changes get reviewed one at a time.
+      python-deps:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+          - "minor"
