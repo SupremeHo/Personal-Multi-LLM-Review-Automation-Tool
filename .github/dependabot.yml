@@ -43,3 +43,21 @@ updates:
         update-types:
           - "patch"
           - "minor"
+
+  # Action versions used by .github/workflows/ci.yml
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      actions:
+        patterns:
+          - "*"
