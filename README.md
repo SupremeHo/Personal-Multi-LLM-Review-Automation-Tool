@@ -23,7 +23,7 @@ This project starts as a personal research automation tool to assist with busine
 
 ## 💻 Tech Stack & Versions
 
-* **Language:** Python 3.12 / 3.13 (100%)
+* **Language:** Python 3.14 (100%)
 * **CLI Framework:** [Typer](https://typer.tiangolo.com/) (For rapid, type-hinted CLI generation)
 * **Data Validation:** Pydantic (Strict, provider-neutral schemas with `extra="forbid"`)
 * **Providers:** OpenAI ✅, Anthropic ✅, Google/Gemini ✅
@@ -34,21 +34,17 @@ This project starts as a personal research automation tool to assist with busine
 
 ### 1. Prerequisites
 
-Ensure you have Python 3.12+ installed, create a virtual environment, and install the pinned dependencies. There is no generic `requirements.txt`; pick the file that matches your Python version:
+Ensure you have Python 3.14 installed, create a virtual environment, and install the pinned dependencies:
 
 ```bash
 python -m venv .venv
 # On Windows: .venv\Scripts\activate
 # On macOS/Linux: source .venv/bin/activate
 
-pip install -r requirements_py313_win.txt   # or requirements_py312_win.txt
+pip install -r requirements.txt
 ```
 
-To run the test suite you also need the test-only dependency:
-
-```bash
-pip install -r requirements_dev_win.txt
-```
+`requirements.txt` also carries the test and lint tooling (`pytest`, `ruff`), so no extra install step is needed to run the suite.
 
 ### 2. Environment Setup
 

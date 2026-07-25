@@ -23,7 +23,7 @@
 
 ## 💻 기술 스택 & 버전
 
-* **언어:** Python 3.12 / 3.13 (100%)
+* **언어:** Python 3.14 (100%)
 * **CLI 프레임워크:** [Typer](https://typer.tiangolo.com/) (타입 힌트 기반의 빠른 CLI 생성)
 * **데이터 검증:** Pydantic (`extra="forbid"` 적용, 프로바이더 중립적인 엄격한 스키마)
 * **프로바이더:** OpenAI ✅, Anthropic ✅, Google/Gemini ✅
@@ -34,21 +34,17 @@
 
 ### 1. 사전 준비
 
-Python 3.12 이상을 설치하고, 가상 환경을 만든 뒤 고정된(pinned) 의존성을 설치하세요. 범용 `requirements.txt`는 없으며, 사용하는 Python 버전에 맞는 파일을 선택하면 됩니다:
+Python 3.14를 설치하고, 가상 환경을 만든 뒤 고정된(pinned) 의존성을 설치하세요:
 
 ```bash
 python -m venv .venv
 # Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
 
-pip install -r requirements_py313_win.txt   # 또는 requirements_py312_win.txt
+pip install -r requirements.txt
 ```
 
-테스트 스위트를 실행하려면 테스트 전용 의존성도 추가로 설치해야 합니다:
-
-```bash
-pip install -r requirements_dev_win.txt
-```
+`requirements.txt`에 테스트/린트 도구(`pytest`, `ruff`)도 함께 들어 있어, 테스트 실행을 위해 별도로 설치할 것은 없습니다.
 
 ### 2. 환경 변수 설정
 

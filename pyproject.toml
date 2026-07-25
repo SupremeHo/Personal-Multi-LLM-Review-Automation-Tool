@@ -16,7 +16,7 @@ Issues = "https://github.com/SupremeHo/Personal-Multi-LLM-Review-Automation-Tool
 testpaths = ["tests"]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 88
 indent-width = 4
 exclude = [
@@ -32,8 +32,7 @@ exclude = [
   ".svn",
   ".tox",
   ".venv",
-  ".venv_py312",
-  ".venv_py313",
+  ".venv*",
   "__pypackages__",
   "_build",
   "buck-out",

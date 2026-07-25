@@ -1,4 +1,0 @@
-# Development / test-only dependencies (not required to run the CLI).
-# Install on top of a runtime requirements file:
-#   pip install -r requirements_py313_win.txt -r requirements_dev_win.txt
-pytest==9.1.1

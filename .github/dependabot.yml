@@ -3,8 +3,7 @@
 version: 2
 
 updates:
-  # Picks up every requirements file in the repo root:
-  #   requirements_py312_win.txt, requirements_py313_win.txt, requirements_dev_win.txt
+  # Picks up requirements.txt in the repo root.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:

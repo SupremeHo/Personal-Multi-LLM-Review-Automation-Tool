@@ -388,8 +388,7 @@ Thumbs.db
 
 # Custom workspace settings
 .idea/
-.venv_py312/
-.venv_py313/
+.venv*/
 *.mmd
 .claude/
 _logs/
