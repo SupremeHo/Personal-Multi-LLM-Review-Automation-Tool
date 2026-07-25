@@ -88,7 +88,9 @@ def test_default_repository_writes_both_sinks(tmp_path, temp_db):
     assert list((tmp_path / "_logs").rglob("*.jsonl"))  # JSONL archived
     conn = sqlite3.connect(temp_db)
     try:
-        assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 1  # and SQLite
+        assert (
+            conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 1
+        )  # and SQLite
     finally:
         conn.close()
 

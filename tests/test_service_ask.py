@@ -65,14 +65,16 @@ def test_compare_persists_every_call_under_one_group(monkeypatch, tmp_path, temp
     monkeypatch.setattr(
         registry,
         "PROVIDERS",
-        {"good": GoodProvider(), "fail": FailProvider(), "paidfail": PaidFailProvider()},
+        {
+            "good": GoodProvider(),
+            "fail": FailProvider(),
+            "paidfail": PaidFailProvider(),
+        },
     )
     monkeypatch.setattr(svc, "BASE_DIR", tmp_path)
     monkeypatch.setattr(svc, "DB_PATH", temp_db)
 
-    result = svc.compare(
-        "s", "q", [("good", "m1"), ("fail", "m2"), ("paidfail", "m3")]
-    )
+    result = svc.compare("s", "q", [("good", "m1"), ("fail", "m2"), ("paidfail", "m3")])
 
     conn = sqlite3.connect(temp_db)
     try:
