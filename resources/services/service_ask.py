@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -181,6 +182,9 @@ def compare(
     ErrorInfo value (with any salvaged partial result attached) so a partial /
     quorum result can still be formed. This is the only place failures become data.
 
+    The targets' API calls run in parallel (they are pure I/O waits), but only the
+    calls: persistence stays on this thread - see the loop comment below.
+
     Args:
       targets: list of (provider_name, selected_model) pairs.
     """
@@ -188,32 +192,62 @@ def compare(
     created_at = datetime.now()
     outcome = CompareResult(group_id=group_id)
 
-    for provider_name, selected_model in targets:
-        request = make_request(
-            system_prompt, user_question, selected_model, max_tokens=max_tokens
+    if not targets:
+        return outcome
+
+    # Ids and requests are minted here, on the calling thread, exactly as before,
+    # so a malformed target still fails right here instead of inside a worker.
+    jobs = [
+        (
+            provider_name,
+            selected_model,
+            str(uuid4()),
+            make_request(
+                system_prompt, user_question, selected_model, max_tokens=max_tokens
+            ),
         )
-        log = run_request(
-            str(uuid4()), request, provider_name, created_at, group_id=group_id
-        )
+        for provider_name, selected_model in targets
+    ]
 
-        if persist:
-            persist_log(log)
-
-        outcome.logs.append(log)
-
-        if log.success and log.result is not None:
-            outcome.successes.append(log.result)
-        else:
-            outcome.failures.append(
-                ErrorInfo(
-                    provider=provider_name,
-                    model=selected_model,
-                    error_type=log.error_type or "UnknownError",
-                    message=log.error or "",
-                    elapsed_sec=log.elapsed_sec,
-                    partial_result=log.result,  # salvaged PaidResponseError result, if any
-                    created_at=created_at,
-                )
+    # Only the blocking API calls run in parallel; run_request() turns every
+    # outcome into an LLMCallLog and never raises, so a worker cannot break the pool.
+    with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+        futures = [
+            pool.submit(
+                run_request, run_id, request, provider_name, created_at, group_id
             )
+            for provider_name, _, run_id, request in jobs
+        ]
+
+        # Iterate in SUBMISSION order, not completion order. Two things depend on
+        # this: every write happens on this one thread (no concurrent SQLite or
+        # JSONL writers - same-provider targets share one JSONL file), and the
+        # stored row order plus successes/failures stay in target order however
+        # the latencies fall. Persisting inside the pool still overlaps that local
+        # I/O with the calls still in flight.
+        for (provider_name, selected_model, _, _), future in zip(
+            jobs, futures, strict=True
+        ):
+            log = future.result()
+
+            if persist:
+                persist_log(log)
+
+            outcome.logs.append(log)
+
+            if log.success and log.result is not None:
+                outcome.successes.append(log.result)
+            else:
+                outcome.failures.append(
+                    ErrorInfo(
+                        provider=provider_name,
+                        model=selected_model,
+                        error_type=log.error_type or "UnknownError",
+                        message=log.error or "",
+                        elapsed_sec=log.elapsed_sec,
+                        partial_result=log.result,  # salvaged PaidResponseError result, if any
+                        created_at=created_at,
+                    )
+                )
 
     return outcome
