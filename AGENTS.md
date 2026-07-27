@@ -28,7 +28,6 @@ cli.py                              # thin Typer layer: parse args → delegate 
 - **`services/service_ask.py`** is the orchestration entry point: `ask()` (single) and `compare()` (multi). It mints `run_id`/`group_id`/`response_id`, resolves providers via the registry, turns every outcome into an `LLMCallLog`, collects failures as `ErrorInfo` (compare only), and archives via `persist_log()`.
 - **`log_repository.py`** is the persistence seam. `LogWriter` (Protocol) is one destination; `LogRepository.save()` fans a log out to all of them; `LogReader`/`SqliteLogReader` serves the `history` command. `default_repository()` wires the production set: `JsonlLogWriter` then `SqliteLogWriter`. The service knows only `save()`/`recent()` — never JSONL layout or SQLite connections.
 - Small shared helpers: **`diagnostics.py`** (`print_error`, the `[file][func] Error Message:` convention) and **`providers/response_error.py`** (`PaidResponseError`).
-- **`config.py`, `models.py`, `prompts.py` are empty placeholders** left from the pre-refactor layout. Nothing imports them; don't go looking for logic there.
 
 When fixing behavior, touch the layer that owns it: the shared flow → `runner.py`; a provider's API quirks → that `provider_*.py`; orchestration → `service_ask.py`; where/how a log is stored → `log_repository.py`. Adding a provider = add a `provider_*.py` + one line in `registry.PROVIDERS`.
 
