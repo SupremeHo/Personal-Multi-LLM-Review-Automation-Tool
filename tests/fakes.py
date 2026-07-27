@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 import types
 from pathlib import Path
 
@@ -148,3 +150,35 @@ class PaidFailProvider:
         raise PaidResponseError(
             make_result(request, "paidfail"), ValueError("cost broke")
         )
+
+
+class BarrierProvider:
+    """
+    Answers only once `barrier.parties` calls are in flight at the same time.
+
+    Give the barrier a timeout: if compare() ran its targets sequentially the
+    first call would wait alone until that timeout and raise BrokenBarrierError,
+    so concurrency is asserted deterministically instead of by measuring sleeps.
+    """
+
+    provider_name = "barrier"
+
+    def __init__(self, barrier: threading.Barrier):
+        self._barrier = barrier
+
+    def ask(self, request: LLMRequest) -> LLMCallResult:
+        self._barrier.wait()
+        return make_result(request, self.provider_name)
+
+
+class SlowProvider:
+    """Answers after a delay, to check result order does not follow latency."""
+
+    provider_name = "slow"
+
+    def __init__(self, delay: float):
+        self._delay = delay
+
+    def ask(self, request: LLMRequest) -> LLMCallResult:
+        time.sleep(self._delay)
+        return make_result(request, self.provider_name)

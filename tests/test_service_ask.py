@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 
 import pytest
 
 from resources.providers import registry
 from resources.services import service_ask as svc
-from tests.fakes import FailProvider, GoodProvider, PaidFailProvider
+from tests.fakes import (
+    BarrierProvider,
+    FailProvider,
+    GoodProvider,
+    PaidFailProvider,
+    SlowProvider,
+)
 
 
 @pytest.fixture
@@ -56,6 +63,39 @@ def test_compare_collects_successes_and_failures(fake_providers):
     # PaidResponseError keeps the billed response as data.
     assert by_provider["paidfail"].partial_result is not None
     assert by_provider["paidfail"].partial_result.response_text == "ok"
+
+
+def test_compare_runs_targets_concurrently(monkeypatch):
+    # Every target must be in flight at the same time. The barrier only releases
+    # once all three calls have arrived, so a sequential compare() would leave the
+    # first one waiting alone, time out, and turn all three into failed logs.
+    barrier = threading.Barrier(3, timeout=5)
+    monkeypatch.setattr(registry, "PROVIDERS", {"barrier": BarrierProvider(barrier)})
+
+    result = svc.compare(
+        "s",
+        "q",
+        [("barrier", "m1"), ("barrier", "m2"), ("barrier", "m3")],
+        persist=False,
+    )
+
+    assert len(result.successes) == 3
+    assert result.failures == []
+
+
+def test_compare_keeps_target_order_regardless_of_latency(monkeypatch):
+    # Results are collected in submission order, not completion order, so the slow
+    # target stays first even though the fast one answers well before it.
+    monkeypatch.setattr(
+        registry,
+        "PROVIDERS",
+        {"slow": SlowProvider(0.2), "good": GoodProvider()},
+    )
+
+    result = svc.compare("s", "q", [("slow", "m1"), ("good", "m2")], persist=False)
+
+    assert [log.provider for log in result.logs] == ["slow", "good"]
+    assert [r.provider for r in result.successes] == ["slow", "good"]
 
 
 def test_compare_persists_every_call_under_one_group(monkeypatch, tmp_path, temp_db):

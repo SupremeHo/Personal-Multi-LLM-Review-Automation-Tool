@@ -101,7 +101,7 @@
   5. 저장 추상화(`LogRepository`/`LogWriter`)는 **뒤로 미룸**(YAGNI). 일단 단일 Facade(`RunRecorder`).
   6. provider registry/factory(단순 dict 매핑).
   7. **Claude 하나만** 붙이고 검증(Gemini 동시 X).
-  8. async 병렬 호출은 provider 2개 안정 후.
+  8. ~~async 병렬 호출은 provider 2개 안정 후.~~ **→ 해결됨 (2026.07.27):** async가 아니라 `ThreadPoolExecutor`로 확정. 아래 "compare 병렬화" 항목 참조.
 
 ### 2단계 — 계층형 리팩토링 완료 (2026.06.30 ~ 07.01)
 
@@ -125,6 +125,23 @@
 - `tests/`에 **무과금** pytest 스위트(가짜 SDK 응답/가짜 provider 주입). `pyproject.toml`에 `testpaths=["tests"]` — 기존 `test/`(실 API 호출 스크립트)는 수집 제외.
 - 커버리지: 스키마 계약, 비용 계산(Decimal), `run_chat`(성공/client None/과금 후 실패 보존), provider 매핑, registry, service `ask`/`compare`, storage 토큰 매핑·멱등성. **30 passed.**
 - `pytest`는 테스트 전용 의존성으로 `requirements_dev_win.txt`에 분리(`pytest==9.1.1`).
+
+### compare 병렬화 (2026.07.27)
+
+`service_ask.compare`의 순차 `for` 루프를 `ThreadPoolExecutor(max_workers=len(targets))`로 교체. 순수 I/O 대기라 벽시계 시간이 `sum(latency)` → `max(latency)`가 됨.
+
+**async를 쓰지 않은 이유:** 동시 호출 수가 2~4개(`-t`로 명시)라 asyncio의 강점(수천 소켓, 태스크당 낮은 메모리)이 무의미한 반면, 변경 범위는 압도적으로 큼 — `ChatProvider` Protocol 시그니처, `runner.run_chat`, provider 3개(`AsyncOpenAI`/`AsyncAnthropic`), `service_ask.ask`, `cli.py`(단일 `ask`까지 `asyncio.run` 필요), `tests/fakes.py` 전체, 그리고 `pytest-asyncio` 신규 의존성. 게다가 `log_repository`의 sqlite3/파일 쓰기는 블로킹이라 결국 `asyncio.to_thread`로 감싸야 해서 이점이 상쇄됨. 스레드 쪽은 `run_request()`가 이미 완결된 작업 단위(예외를 절대 던지지 않고 항상 `LLMCallLog` 반환)라 `service_ask.py` 한 파일만 수정하면 됨.
+
+**영속화는 병렬화하지 않음 (핵심 결정).** API 호출만 스레드로 돌리고, future는 **완료 순이 아니라 제출 순**으로 소비해 `persist_log`는 호출 스레드에서만 실행. SQLite 락 회피는 부수적 이유이고, 진짜 이유는 두 가지:
+
+1. JSONL 파일명이 배치 공통 `created_at` 기준이라 **같은 provider를 여러 번 지정하면 한 파일에 동시 append**가 발생(Windows append는 원자적이지 않음).
+2. `SqliteLogReader.recent`가 삽입 `id` 순으로 정렬해 한 그룹의 순서를 결정적으로 유지하는데, 병렬 쓰기는 이를 응답 지연 순서로 바꿔 `history -g <group_id>` 결과를 매번 다르게 만듦.
+
+`persist_log`를 풀 블록 **안**에 두어, 아직 통신 중인 호출과 로컬 I/O가 겹치도록 함(중간 크래시 시 앞선 결과 보존).
+
+**타임아웃(`future.result(timeout=...)`)은 의도적으로 배제.** 블로킹 소켓 읽기는 취소가 불가능하므로 타임아웃은 **이미 과금된 응답을 버리는 결과**가 되어 "Never discard a billed response" 불변식과 충돌함.
+
+**테스트:** `BarrierProvider`(`threading.Barrier`로 동시 실행을 결정적으로 검증 — 순차 실행이면 타임아웃되어 전부 실패), `SlowProvider`(지연이 결과 순서에 영향을 주지 않음을 검증)를 `tests/fakes.py`에 추가. 기존 `compare` 테스트 2건은 무수정 통과(= API 호환). **44 passed.**
 
 ---
 
