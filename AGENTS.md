@@ -12,17 +12,6 @@ A personal CLI tool that sends a prompt to LLM providers, then logs each respons
 
 The code is a single layered architecture under `resources/`, used as a package with **package-absolute imports** (`from resources.schemas import ...`) and run from the **project root**. The earlier "flat modules vs. SOLID rewrite" split is gone (`llm_client.py` was removed; its logic now lives in the provider/service layers).
 
-```bash
-cli.py                              # thin Typer layer: parse args → delegate → render
-  └─ services/service_ask.py        # owns ids (run_id/group_id/response_id), builds logs, collects ErrorInfo, archives
-       ├─ providers/registry.py     # name → ChatProvider instance (the only place that knows concrete providers)
-       │    └─ providers/provider_{openai,anthropic,google}.py   # per-provider API specifics
-       │         └─ providers/runner.py     # run_chat(): the shared call pipeline, provider differences injected as callbacks
-       │              └─ count_cost.py / schemas.py
-       └─ log_repository.py         # LogRepository: fans one log out to every writer; reads back via SqliteLogReader
-            └─ storage_json.py / storage_sqlite.py
-```
-
 - **`providers/base_provider.py`** defines the `ChatProvider` Protocol (structural contract): `provider_name: str` + `ask(request: LLMRequest) -> LLMCallResult`. Concrete providers satisfy it by structure, not inheritance. (Design choice: Protocol over ABC; shared behavior is reused via `runner.run_chat`, not a base class.)
 - **`providers/runner.py`** holds the common chat pipeline once (preflight → paid call → parse → best-effort cost → assemble result → `PaidResponseError`). Each provider only supplies two callbacks: `_call_api` (the paid call) and `_parse_response` (raw response → `ParsedResponse`).
 - **`services/service_ask.py`** is the orchestration entry point: `ask()` (single) and `compare()` (multi). It mints `run_id`/`group_id`/`response_id`, resolves providers via the registry, turns every outcome into an `LLMCallLog`, collects failures as `ErrorInfo` (compare only), and archives via `persist_log()`.
@@ -50,18 +39,7 @@ python -m resources.cli history -g <group_id>                                   
 
 `history` is free — it only reads the local SQLite DB.
 
-Lint / format (config in `pyproject.toml`, target `py314`, line length 88):
-
-```bash
-ruff check .
-ruff format .
-```
-
-Environments & deps — development is consolidated on **Python 3.14** (standard build; free-threading and the JIT were evaluated and deliberately not used). Dependencies are pinned in a single `requirements.txt`, which includes the test-only `pytest`. Virtualenvs live in the working tree but are **gitignored** (`.venv*/`), so a fresh clone has none — older `.venv_py312`/`.venv_py313` directories may still exist locally and are leftovers:
-
-```bash
-pip install -r requirements.txt
-```
+Environments & deps — development is consolidated on **Python 3.14** (standard build; free-threading and the JIT were evaluated and deliberately not used). Dependencies are pinned in a single `requirements.txt`, which includes the test-only `pytest`. Virtualenvs live in the working tree but are **gitignored** (`.venv*/`), so a fresh clone has none — older `.venv_py312`/`.venv_py313` directories may still exist locally and are leftovers.
 
 Database — the SQLite file `_db/llm_responses.db` is created/seeded from `_db/_create_table.sql` (run it once with the `sqlite3` CLI or any client). `storage_sqlite.py` connects to an **existing** DB and only `ALTER`s in missing audit columns; it does not create the tables.
 
@@ -72,8 +50,6 @@ python -m pytest
 ```
 
 ## Data flow (the `ask` path)
-
-`cli.ask` → `service_ask.ask` (mints ids, builds `LLMRequest`) → `service_ask.run_request` → `registry.get_provider` → `provider.ask` → `runner.run_chat` → returns `LLMCallResult` (or raises `PaidResponseError`) → `run_request` wraps it in an `LLMCallLog` → `service_ask.persist_log` → `default_repository(...).save(log)` fans the log out to `JsonlLogWriter` (appends to `_logs/<Provider>/<prefix>_response_log_<timestamp>.jsonl`) and then `SqliteLogWriter` (upserts into `_db/llm_responses.db`).
 
 `compare` runs the provider-call half of this concurrently per target under one `group_id`, then walks the futures in target order to persist and to collect `ErrorInfo` for any failures.
 
@@ -116,12 +92,3 @@ These conventions encode hard-won billing/safety decisions; don't undo them casu
 ## Environment
 
 Each `provider_*.py` constructs its SDK client at import time (`OpenAI()`, `Anthropic()`) and sets `_default_client` to `None` if the key/init fails, rather than crashing — so a missing key disables one provider instead of the whole tool. `env_check.py` mirrors this: missing keys are **warnings**, not fatal. Keys come from `.env` (see `.env.example`): `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`.
-
-## Code Review
-
-Python code reviews should be based on readability, Pythonic grammar, performance, and testability. We recommend automating the most common PEP 8 Style Guide and adapting industry standards such as the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html) to meet team standards.
-
-- **Security**: SQL injection, XSS, Authentication bypass check
-- **Performance**: N+1 queries, checking unnecessary repeat statements
-- **Convention/Style**: Naming rules, Compliance with import order
-- **Test**: Check if the new feature includes a test
