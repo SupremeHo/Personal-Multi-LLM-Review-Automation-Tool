@@ -7,6 +7,7 @@ import threading
 
 import pytest
 
+from resources.log_repository import JsonlLogWriter, LogRepository
 from resources.providers import registry
 from resources.services import service_ask as svc
 from tests.fakes import (
@@ -19,6 +20,15 @@ from tests.fakes import (
     ParseFailProvider,
     SlowProvider,
 )
+
+
+class _UnavailableSqlite:
+    """Stands in for the SQLite sink when the database cannot be written to."""
+
+    sink_name = "sqlite"
+
+    def write(self, log) -> None:
+        raise sqlite3.OperationalError("database is locked")
 
 
 @pytest.fixture
@@ -132,6 +142,46 @@ def test_compare_isolates_a_worker_that_raises(monkeypatch):
     assert result.failures[0].error_type == "MemoryError"
     # ...and the target queued behind it still comes back
     assert [r.provider for r in result.successes] == ["good"]
+
+
+def test_compare_survives_a_storage_fault_and_records_it(monkeypatch, tmp_path):
+    # A locked database used to end compare() on the first persist_log() call,
+    # dropping every target still unread - responses that were already billed.
+    monkeypatch.setattr(
+        registry, "PROVIDERS", {"good": GoodProvider(), "slow": SlowProvider(0.05)}
+    )
+    monkeypatch.setattr(
+        svc,
+        "default_repository",
+        lambda base_dir, db_path: LogRepository(
+            [JsonlLogWriter(tmp_path), _UnavailableSqlite()]
+        ),
+    )
+
+    result = svc.compare("s", "q", [("good", "m1"), ("slow", "m2")])
+
+    # every target still comes back...
+    assert [r.provider for r in result.successes] == ["good", "slow"]
+    assert result.failures == []  # a storage fault is not a failed call
+    # ...and the archive fault is data, including which sink did accept the log
+    assert [e.sink for e in result.persist_errors] == ["sqlite", "sqlite"]
+    assert result.persist_errors[0].written_sinks == ["jsonl"]
+    # the sink that did work still archived both logs (one file per provider)
+    assert len(list((tmp_path / "_logs").rglob("*.jsonl"))) == 2
+
+
+def test_ask_returns_its_log_even_when_archiving_fails(monkeypatch, tmp_path):
+    monkeypatch.setattr(registry, "PROVIDERS", {"good": GoodProvider()})
+    monkeypatch.setattr(
+        svc,
+        "default_repository",
+        lambda base_dir, db_path: LogRepository([_UnavailableSqlite()]),
+    )
+
+    log = svc.ask("s", "q", "good", "m")
+
+    assert log.success is True
+    assert log.result.response_text == "ok"
 
 
 def test_compare_collects_successes_and_failures(fake_providers):

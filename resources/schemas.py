@@ -308,3 +308,40 @@ class ErrorInfo(BaseModel):
 
     created_at: datetime
     """When the failure was recorded."""
+
+
+class PersistenceErrorInfo(BaseModel):
+    """
+    One storage destination refusing an audit log, represented as data.
+
+    Archiving is a *side effect* of a call that may already have been billed, so a
+    full disk or a locked database must never take down the result held in memory.
+    The write layer therefore reports what it could not store instead of raising,
+    and every sink is attempted independently - one entry per sink that failed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+    """The audit log that could not be stored."""
+
+    sink: str
+    """Destination that refused it ("jsonl", "sqlite")."""
+
+    error_type: str
+    """Exception class name, kept queryable without parsing the message."""
+
+    message: str
+    """Human-readable failure description (str of the underlying exception)."""
+
+    written_sinks: list[str] = []
+    """
+    Destinations that DID accept this log.
+
+    Non-empty next to a failure means the log is now split across stores - the
+    JSONL-succeeded-then-SQLite-failed case - so the inconsistency is recorded
+    rather than left to be discovered later.
+    """
+
+    created_at: datetime
+    """When the storage failure was recorded."""

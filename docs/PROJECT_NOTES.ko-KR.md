@@ -89,6 +89,7 @@
 - **유료 호출 전 preflight 검증**(가격표 존재·파싱·모델명) → 비용 낭비 0.
 - **감사 로그는 항상 기록.** `log_data`를 try 밖에서 1회 생성, latency를 finally에서 측정(성공/실패 무관), `error_type` 항상 기록. 실패 run도 `runs` 행은 남김(`model_responses`는 건너뜀). 로그 조립(`_assemble_log`) 자체도 예외를 던지지 않는다 — 조립 실패 시 provider가 준 `result`/`salvage` 중 형식이 깨진 쪽만 버리고 `error_type="LogAssemblyError"`로 기록. *(2026.08.01: `LLMCallLog(**log_data)`가 try 밖에 있어 워커에서 터지면 compare의 나머지 유료 응답까지 유실되던 문제 수정. `future.result()`도 개별 격리.)*
 - **비용 미산정은 `cost=None`**으로 표현(가짜 0원 센티넬 금지 — 감사 로그 오염 방지).
+- **저장은 부수효과이지 관문이 아니다.** `LogRepository.save()`는 sink별로 독립 시도하고 실패를 `PersistenceErrorInfo`로 반환한다(예외 전파 X). 각 실패는 성공한 sink 목록(`written_sinks`)을 함께 담아 JSONL/SQLite 불일치를 기록한다. `compare`는 이를 `CompareResult.persist_errors`에 모으고(`failures`와 분리 — DB 잠김은 실패한 호출이 아니다), CLI가 답변 뒤에 경고로 출력한다. *(2026.08.01: 저장 실패가 나머지 유료 응답까지 유실시키던 문제 수정.)*
 
 ### 2단계 — 다중 API 호출 / SOLID 리팩토링 (2026.06.25 ~ 진행 중)
 

@@ -86,6 +86,20 @@ def compare(
             typer.echo("(partial response preserved:)")
             typer.echo(f.partial_result.response_text)
 
+    # The answers above survived the storage fault, but the audit trail did not -
+    # say so here, where it cannot scroll past unnoticed during the calls.
+    if result.persist_errors:
+        typer.secho(
+            "\n---- WARNING: these answers were not fully archived ----",
+            fg=typer.colors.YELLOW,
+            bold=True,
+        )
+        for p in result.persist_errors:
+            stored = (
+                f"; stored in {', '.join(p.written_sinks)}" if p.written_sinks else ""
+            )
+            typer.echo(f"run {p.run_id}: {p.sink} failed ({p.error_type}{stored})")
+
 
 @app.command()
 def check_env():
