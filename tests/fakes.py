@@ -178,6 +178,34 @@ class ParseFailProvider:
         )
 
 
+class BadResultProvider:
+    """
+    Returns something that is not an LLMCallResult, breaking log assembly.
+
+    The ChatProvider contract is structural, so nothing stops a provider from
+    returning the wrong type; the failure only surfaces when the audit log is
+    built - after the call was already paid for.
+    """
+
+    provider_name = "badresult"
+
+    def ask(self, request: LLMRequest):
+        return "not a result object"
+
+
+class BadSalvageProvider:
+    """Billed response preserved, but the salvage attached to it is malformed."""
+
+    provider_name = "badsalvage"
+
+    def ask(self, request: LLMRequest) -> LLMCallResult:
+        raise PaidResponseError(
+            ValueError("cost broke"),
+            result=make_result(request, "badsalvage"),
+            salvage="not a salvage object",
+        )
+
+
 class BarrierProvider:
     """
     Answers only once `barrier.parties` calls are in flight at the same time.

@@ -17,10 +17,17 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+from resources.diagnostics import print_error
 from resources.log_repository import default_repository
 from resources.providers.registry import get_provider
 from resources.providers.response_error import PaidResponseError
-from resources.schemas import ErrorInfo, LLMCallLog, LLMCallResult, LLMRequest
+from resources.schemas import (
+    ErrorInfo,
+    LLMCallLog,
+    LLMCallResult,
+    LLMRequest,
+    SalvageInfo,
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DB_PATH = BASE_DIR / "_db" / "llm_responses.db"
@@ -43,6 +50,44 @@ def make_request(
     )
 
 
+def _assemble_log(log_data: dict) -> LLMCallLog:
+    """
+    Turn the collected log fields into an LLMCallLog without ever raising.
+
+    Building the log is itself a failure point - 1.5단계 lost a whole run when the
+    error branch assembled an invalid dict - and LLMCallLog forbids extras, so one
+    badly typed field is a ValidationError. Letting that escape would break
+    run_request's "never raises" contract and, inside compare, abandon the other
+    targets' already-billed results.
+
+    Every entry in log_data except `result` and `salvage` is written by this layer
+    from already-validated values; those two are the only ones that come from a
+    provider. So the fallback drops whichever of them is not the object it claims
+    to be - keeping a genuinely billed result - and records why the log degraded.
+    """
+    try:
+        return LLMCallLog(**log_data)
+
+    except Exception as e:  # noqa: BLE001 - a broken log must still be a log.
+        print_error(
+            f"Audit log assembly failed - {e}",
+            module="service_ask.py",
+            func="_assemble_log",
+        )
+        result = log_data.get("result")
+        salvage = log_data.get("salvage")
+        return LLMCallLog(
+            **{
+                **log_data,
+                "success": False,
+                "error": f"Audit log assembly failed: {e}",
+                "error_type": "LogAssemblyError",
+                "result": result if isinstance(result, LLMCallResult) else None,
+                "salvage": salvage if isinstance(salvage, SalvageInfo) else None,
+            }
+        )
+
+
 def run_request(
     run_id: str,
     request: LLMRequest,
@@ -55,7 +100,9 @@ def run_request(
 
     The log is built once up front and filled in place, so it is always returned
     - on success, on a salvaged partial failure (PaidResponseError), or on any
-    other failure - with elapsed_sec recorded either way.
+    other failure - with elapsed_sec recorded either way. Assembling it is routed
+    through _assemble_log so this function never raises, which is what lets
+    compare() run it in a worker thread.
 
     `group_id` ties this call to a comparison batch; None for a single ask.
     """
@@ -100,7 +147,7 @@ def run_request(
     finally:
         log_data["elapsed_sec"] = round(time.perf_counter() - start_time, 3)
 
-    return LLMCallLog(**log_data)
+    return _assemble_log(log_data)
 
 
 def persist_log(log: LLMCallLog) -> None:
@@ -214,7 +261,8 @@ def compare(
     ]
 
     # Only the blocking API calls run in parallel; run_request() turns every
-    # outcome into an LLMCallLog and never raises, so a worker cannot break the pool.
+    # outcome into an LLMCallLog and never raises (see _assemble_log), so a worker
+    # cannot break the pool. Collection guards each future anyway - see below.
     with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
         futures = [
             pool.submit(
@@ -229,10 +277,39 @@ def compare(
         # stored row order plus successes/failures stay in target order however
         # the latencies fall. Persisting inside the pool still overlaps that local
         # I/O with the calls still in flight.
-        for (provider_name, selected_model, _, _), future in zip(
+        for (provider_name, selected_model, run_id, request), future in zip(
             jobs, futures, strict=True
         ):
-            log = future.result()
+            try:
+                log = future.result()
+
+            except Exception as e:  # noqa: BLE001 - one dead worker must not abandon the rest.
+                # run_request() is built never to raise, so reaching this means an
+                # unforeseen failure inside the worker. Re-raising it here would
+                # stop the loop and throw away every target still unread - including
+                # calls already billed. Degrade this one target to a failed log and
+                # keep collecting instead.
+                print_error(
+                    f"Worker for '{provider_name}' raised unexpectedly - {e}",
+                    module="service_ask.py",
+                    func="compare",
+                )
+                log = _assemble_log(
+                    {
+                        "run_id": run_id,
+                        "group_id": group_id,
+                        "created_at": created_at,
+                        "provider": provider_name,
+                        "system_prompt": request.system_prompt,
+                        "user_prompt": request.user_question,
+                        "success": False,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "elapsed_sec": None,  # the worker died before reporting one
+                        "result": None,
+                        "salvage": None,
+                    }
+                )
 
             if persist:
                 persist_log(log)

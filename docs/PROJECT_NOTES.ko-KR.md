@@ -87,7 +87,7 @@
 
 - **돈 쓴 응답은 절대 버리지 않는다.** 청구 후 단계(파싱·비용 계산·결과 검증) 실패는 모두 `PaidResponseError`로 감사 로그에 남긴다. 비용 계산만 실패하면 응답/토큰이 그대로 보존되고(`cost=None`), 파싱이나 결과 검증이 실패해 남길 응답이 없으면 `SalvageInfo`(실패 단계·provider·요청 모델 + 원시 응답에서 최선으로 읽어낸 id/model/usage)를 대신 남긴다. *(2026.08.01: 원래 비용 계산 실패에만 걸려 있던 경계를 청구 후 전 구간으로 확장.)*
 - **유료 호출 전 preflight 검증**(가격표 존재·파싱·모델명) → 비용 낭비 0.
-- **감사 로그는 항상 기록.** `log_data`를 try 밖에서 1회 생성, latency를 finally에서 측정(성공/실패 무관), `error_type` 항상 기록. 실패 run도 `runs` 행은 남김(`model_responses`는 건너뜀).
+- **감사 로그는 항상 기록.** `log_data`를 try 밖에서 1회 생성, latency를 finally에서 측정(성공/실패 무관), `error_type` 항상 기록. 실패 run도 `runs` 행은 남김(`model_responses`는 건너뜀). 로그 조립(`_assemble_log`) 자체도 예외를 던지지 않는다 — 조립 실패 시 provider가 준 `result`/`salvage` 중 형식이 깨진 쪽만 버리고 `error_type="LogAssemblyError"`로 기록. *(2026.08.01: `LLMCallLog(**log_data)`가 try 밖에 있어 워커에서 터지면 compare의 나머지 유료 응답까지 유실되던 문제 수정. `future.result()`도 개별 격리.)*
 - **비용 미산정은 `cost=None`**으로 표현(가짜 0원 센티넬 금지 — 감사 로그 오염 방지).
 
 ### 2단계 — 다중 API 호출 / SOLID 리팩토링 (2026.06.25 ~ 진행 중)
