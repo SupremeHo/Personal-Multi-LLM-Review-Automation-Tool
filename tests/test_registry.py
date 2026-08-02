@@ -15,6 +15,12 @@ def test_known_providers_resolve_and_satisfy_contract():
         assert isinstance(provider, ChatProvider)
 
 
+def test_providers_are_shared_instances():
+    # compare() calls one instance from several threads at once, so the contract
+    # that ask() is thread-safe rests on this sharing being deliberate.
+    assert registry.get_provider("openai") is registry.get_provider("openai")
+
+
 def test_unknown_provider_raises_keyerror():
     with pytest.raises(KeyError):
         registry.get_provider("does-not-exist")
