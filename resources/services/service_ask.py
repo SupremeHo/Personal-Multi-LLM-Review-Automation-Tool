@@ -26,6 +26,7 @@ from resources.schemas import (
     LLMCallLog,
     LLMCallResult,
     LLMRequest,
+    PersistenceErrorInfo,
     SalvageInfo,
 )
 
@@ -150,7 +151,7 @@ def run_request(
     return _assemble_log(log_data)
 
 
-def persist_log(log: LLMCallLog) -> None:
+def persist_log(log: LLMCallLog) -> list[PersistenceErrorInfo]:
     """
     Archive one audit log through the default repository (JSONL + SQLite).
 
@@ -158,8 +159,26 @@ def persist_log(log: LLMCallLog) -> None:
     billed-but-failed ones, leaves an auditable record. The repository is built
     from the current module paths on each call so tests can redirect BASE_DIR /
     DB_PATH before persisting.
+
+    Storage faults are returned as data rather than raised (see LogRepository.save),
+    and each one is printed the moment it happens so a failed archive can never pass
+    unnoticed - the caller is holding a response that may already have been paid for.
     """
-    default_repository(BASE_DIR, DB_PATH).save(log)
+    errors = default_repository(BASE_DIR, DB_PATH).save(log)
+
+    for error in errors:
+        stored_elsewhere = (
+            f" (already stored in: {', '.join(error.written_sinks)})"
+            if error.written_sinks
+            else ""
+        )
+        print_error(
+            f"Archiving run {error.run_id} to {error.sink} failed{stored_elsewhere} - {error.message}",
+            module="service_ask.py",
+            func="persist_log",
+        )
+
+    return errors
 
 
 def read_history(limit: int = 10, group_id: str | None = None) -> list[LLMCallLog]:
@@ -185,6 +204,8 @@ def ask(
     Single-provider ask: mint ids, build the request, call the provider, and log it.
 
     Archives the log by default; pass persist=False to skip all I/O (e.g. tests).
+    A storage fault does not raise - persist_log reports it on the console and the
+    log is returned regardless, so the response survives a failed archive.
     """
     run_id = str(uuid4())
     created_at = datetime.now()
@@ -206,13 +227,17 @@ class CompareResult:
 
     Each call keeps its own run_id; `group_id` ties them together as one batch.
     `logs` holds every outcome for persistence; `successes`/`failures` split them
-    for quorum / cross-validation logic, with failures captured as ErrorInfo values.
+    by whether the *call* worked, with failures captured as ErrorInfo values.
+    `persist_errors` keeps archiving faults apart from provider faults: a locked
+    database says nothing about the quality of the answers, so it must not be
+    counted as a failed call.
     """
 
     group_id: str
     logs: list[LLMCallLog] = field(default_factory=list)
     successes: list[LLMCallResult] = field(default_factory=list)
     failures: list[ErrorInfo] = field(default_factory=list)
+    persist_errors: list[PersistenceErrorInfo] = field(default_factory=list)
 
 
 def compare(
@@ -232,6 +257,8 @@ def compare(
     A failing provider does not stop the others: each failure is collected as an
     ErrorInfo value (with any salvaged partial result attached) so a partial /
     quorum result can still be formed. This is the only place failures become data.
+    Archiving faults are collected the same way, into `persist_errors`, so a full
+    disk cannot destroy answers that were already paid for.
 
     The targets' API calls run in parallel (they are pure I/O waits), but only the
     calls: persistence stays on this thread - see the loop comment below.
@@ -311,9 +338,10 @@ def compare(
                     }
                 )
 
-            if persist:
-                persist_log(log)
-
+            # Collect first, archive second. Persistence is a side effect of calls
+            # that were already billed, so this target's result is in hand before
+            # any disk is touched, and a storage fault is recorded as data rather
+            # than ending the loop and abandoning the targets still unread.
             outcome.logs.append(log)
 
             if log.success and log.result is not None:
@@ -331,5 +359,8 @@ def compare(
                         created_at=created_at,
                     )
                 )
+
+            if persist:
+                outcome.persist_errors.extend(persist_log(log))
 
     return outcome
