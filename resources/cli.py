@@ -82,6 +82,19 @@ def compare(
         raise typer.Exit(code=1) from e
 
     typer.echo(f"\n==== Comparison (group {result.group_id}) ====")
+    typer.echo(
+        f"{len(result.usable_responses)}/{len(result.logs)} usable "
+        f"(quorum {service_ask.QUORUM})  |  collection: {result.collection_status}"
+        f"  |  audit: {result.audit_status}"
+    )
+    if result.collection_status == "insufficient":
+        typer.secho(
+            f"Not a comparison: fewer than {service_ask.QUORUM} usable answers came "
+            "back. Read what follows as single answers, not as cross-checked ones.",
+            fg=typer.colors.YELLOW,
+            bold=True,
+        )
+
     for r in result.successes:
         typer.echo(f"\n---- {r.provider} / {r.model} ----")
         typer.echo(r.response_text)
