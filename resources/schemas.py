@@ -266,6 +266,15 @@ class LLMCallLog(BaseModel):
     )
     """Canonical provider key of the model that generated the response."""
 
+    model: str | None = None
+    """
+    Model that was *requested*.
+
+    Kept next to `provider` so a failed run still records what was attempted - the
+    result (which carries the model the provider actually answered with) is None
+    on failure, and without this a failed audit row cannot say which model it was.
+    """
+
     system_prompt: str
     """System prompt used for the LLM call."""
 

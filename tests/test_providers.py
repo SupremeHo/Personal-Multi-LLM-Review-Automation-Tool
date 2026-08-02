@@ -20,10 +20,42 @@ from tests.fakes import (
 )
 
 
-def _request(model):
+def _request(model, **kwargs):
     return LLMRequest(
-        response_id="rid", system_prompt="s", user_question="q", selected_model=model
+        response_id="rid",
+        system_prompt="s",
+        user_question="q",
+        selected_model=model,
+        **kwargs,
     )
+
+
+def test_every_provider_applies_the_requested_output_ceiling(tmp_path):
+    # Regression: OpenAI dropped LLMRequest.max_tokens on the floor, so the ceiling
+    # meant to cap output cost applied to two providers out of three. Each SDK
+    # spells it differently, which is exactly how that went unnoticed.
+    price = write_price_table(tmp_path / "p.json", "m")
+    request = _request("m", max_tokens=123)
+    openai_calls, anthropic_calls, google_calls = [], [], []
+
+    OpenAIProvider(
+        client=fake_openai_client(make_openai_response(model="m"), calls=openai_calls),
+        price_path=price,
+    ).ask(request)
+    AnthropicProvider(
+        client=fake_anthropic_client(
+            make_anthropic_response(model="m"), calls=anthropic_calls
+        ),
+        price_path=price,
+    ).ask(request)
+    GoogleProvider(
+        client=fake_google_client(make_google_response(model="m"), calls=google_calls),
+        price_path=price,
+    ).ask(request)
+
+    assert openai_calls[0]["max_completion_tokens"] == 123  # not the deprecated name
+    assert anthropic_calls[0]["max_tokens"] == 123
+    assert google_calls[0]["config"].max_output_tokens == 123
 
 
 def test_providers_satisfy_contract():

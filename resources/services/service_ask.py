@@ -13,7 +13,7 @@ from __future__ import annotations
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -126,13 +126,16 @@ def run_request(
 
     `group_id` ties this call to a comparison batch; None for a single ask.
     """
-    created_at = created_at or datetime.now()
+    # Stamped in UTC: an audit trail that outlives a DST change or a trip abroad
+    # cannot be ordered by naive local times. The CLI converts back for display.
+    created_at = created_at or datetime.now(UTC)
 
     log_data = {
         "run_id": run_id,
         "group_id": group_id,
         "created_at": created_at,
         "provider": provider_name,
+        "model": request.selected_model,
         "system_prompt": request.system_prompt,
         "user_prompt": request.user_question,
         "success": False,
@@ -228,7 +231,7 @@ def ask(
     log is returned regardless, so the response survives a failed archive.
     """
     run_id = str(uuid4())
-    created_at = datetime.now()
+    created_at = datetime.now(UTC)
     request = make_request(
         system_prompt, user_question, selected_model, max_tokens=max_tokens
     )
@@ -373,7 +376,7 @@ def compare(
         paid call, so it costs nothing.
     """
     group_id = str(uuid4())
-    created_at = datetime.now()
+    created_at = datetime.now(UTC)
     outcome = CompareResult(group_id=group_id, persist_attempted=persist)
 
     if not targets:
@@ -452,6 +455,7 @@ def compare(
                         "group_id": group_id,
                         "created_at": created_at,
                         "provider": provider_name,
+                        "model": selected_model,
                         "system_prompt": request.system_prompt,
                         "user_prompt": request.user_question,
                         "success": False,

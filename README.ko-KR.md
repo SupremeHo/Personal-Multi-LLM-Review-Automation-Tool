@@ -114,7 +114,7 @@ python -m resources.cli ask "<system_prompt>" "<user_question>" \
   --provider anthropic --model claude-haiku-4-5
 ```
 
-**여러 모델을 나란히 비교** (핵심 "리뷰" 기능) — `--target/-t provider:model`을 최소 1개 지정해야 하며, 각 호출은 자체 `run_id`를 갖고 하나의 공유 `group_id`로 묶입니다:
+**여러 모델을 비교** (핵심 "리뷰" 기능) — `--target/-t provider:model`을 최소 1개 지정해야 하고 동일한 `provider:model`은 중복 지정할 수 없습니다. 답변은 지정한 타겟 순서대로 출력됩니다. 각 호출은 자체 `run_id`를 갖고 하나의 공유 `group_id`로 묶입니다:
 
 ```bash
 python -m resources.cli compare "<system_prompt>" "<user_question>" \
