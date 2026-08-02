@@ -10,6 +10,8 @@ import pytest
 from resources.providers import registry
 from resources.services import service_ask as svc
 from tests.fakes import (
+    BadResultProvider,
+    BadSalvageProvider,
     BarrierProvider,
     FailProvider,
     GoodProvider,
@@ -79,6 +81,57 @@ def test_billed_parse_failure_survives_persistence_round_trip(
     (stored,) = svc.read_history(limit=5)
     assert stored.salvage.failed_stage == "parse"
     assert stored.salvage.raw_usage == {"input_tokens": 7}
+
+
+def test_run_request_never_raises_when_log_assembly_fails(monkeypatch):
+    # Regression: LLMCallLog(**log_data) used to sit outside the try, so an invalid
+    # field made run_request raise - the 1.5단계 "the failure log itself crashes" bug,
+    # and in compare it would take every other target's result down with it.
+    monkeypatch.setattr(registry, "PROVIDERS", {"badresult": BadResultProvider()})
+
+    log = svc.run_request("rid", svc.make_request("s", "q", "m"), "badresult")
+
+    assert log.success is False
+    assert log.error_type == "LogAssemblyError"
+    assert log.result is None
+    assert log.run_id == "rid"  # the run stays auditable
+
+
+def test_log_assembly_fallback_keeps_the_billed_result(monkeypatch):
+    # Only the poisoned field may be dropped: a response we already paid for must
+    # survive even when the log around it fails to validate.
+    monkeypatch.setattr(registry, "PROVIDERS", {"badsalvage": BadSalvageProvider()})
+
+    log = svc.run_request("rid", svc.make_request("s", "q", "m"), "badsalvage")
+
+    assert log.error_type == "LogAssemblyError"
+    assert log.salvage is None  # the malformed field is the one that goes
+    assert log.result is not None
+    assert log.result.response_text == "ok"
+
+
+def test_compare_isolates_a_worker_that_raises(monkeypatch):
+    # Belt and braces: even if run_request somehow raises, future.result() must not
+    # abandon the targets after it - their calls were paid for too.
+    monkeypatch.setattr(
+        registry, "PROVIDERS", {"good": GoodProvider(), "boom": GoodProvider()}
+    )
+    real_run_request = svc.run_request
+
+    def exploding_run_request(run_id, request, provider_name, *args, **kwargs):
+        if provider_name == "boom":
+            raise MemoryError("worker died")
+        return real_run_request(run_id, request, provider_name, *args, **kwargs)
+
+    monkeypatch.setattr(svc, "run_request", exploding_run_request)
+
+    result = svc.compare("s", "q", [("boom", "m1"), ("good", "m2")], persist=False)
+
+    # the dead worker degrades to a failed log instead of killing the batch...
+    assert [log.provider for log in result.logs] == ["boom", "good"]
+    assert result.failures[0].error_type == "MemoryError"
+    # ...and the target queued behind it still comes back
+    assert [r.provider for r in result.successes] == ["good"]
 
 
 def test_compare_collects_successes_and_failures(fake_providers):
