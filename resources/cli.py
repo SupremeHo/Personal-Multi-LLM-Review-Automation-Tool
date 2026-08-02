@@ -13,17 +13,74 @@ from resources.services import service_ask
 app = typer.Typer()
 
 
+def _price(log) -> str:
+    """One call's cost, or why there isn't one. Never invents a zero."""
+    if log.result is None:
+        return "not billed" if log.salvage is None else "billed, unpriced"
+    if log.result.cost is None:
+        return "billed, unpriced"
+    return f"${log.result.cost.total_usd:.6f}"
+
+
 def _render_log(log) -> None:
     """Print a single call's outcome (success, salvaged partial, or failure)."""
     if log.success and log.result is not None:
-        typer.echo(f"\n==== {log.provider} response ====\n")
+        typer.echo(f"\n==== {log.provider} response  [{_price(log)}] ====\n")
         typer.echo(f"{log.result.response_text}\n")
     elif log.result is not None:
         # Billed but a later step failed; the paid response was preserved.
-        typer.echo(f"[cli.py] Partial failure (response preserved): {log.error}")
+        typer.echo(
+            f"[cli.py] Partial failure ({_price(log)}, response preserved): {log.error}"
+        )
         typer.echo(f"{log.result.response_text}\n")
     else:
         typer.echo(f"[cli.py] Error Message: {log.error}")
+        if log.salvage is not None:
+            typer.echo(
+                f"[cli.py] This call was billed but nothing could be read from it "
+                f"(failed at {log.salvage.failed_stage}); it is in the audit log."
+            )
+
+
+def _render_compare_entry(log) -> None:
+    """Print one target's outcome. Driven by the log, so target order is preserved."""
+    label = f"{log.provider} / {log.model}"
+
+    if log.success and log.result is not None:
+        typer.echo(f"\n---- {label}  [{_price(log)}] ----")
+        typer.echo(log.result.response_text)
+    elif log.result is not None:
+        typer.echo(f"\n---- {label}  [{_price(log)}]  [PARTIAL: {log.error_type}] ----")
+        typer.echo("(billed; the answer survived but its cost did not)")
+        typer.echo(log.result.response_text)
+    else:
+        typer.echo(f"\n---- {label}  [FAILED: {log.error_type}] ----")
+        typer.echo(log.error or "")
+        if log.salvage is not None:
+            typer.echo(
+                f"(billed, but nothing readable came back - failed at "
+                f"{log.salvage.failed_stage})"
+            )
+
+
+def _render_cost_summary(logs) -> None:
+    """Total what this command spent, and say so when the total is understated."""
+    total = sum(
+        log.result.cost.total_usd
+        for log in logs
+        if log.result is not None and log.result.cost is not None
+    )
+    unpriced = sum(
+        1
+        for log in logs
+        if (log.result is not None and log.result.cost is None)
+        or log.salvage is not None
+    )
+
+    line = f"\nTotal: ${total:.6f}"
+    if unpriced:
+        line += f"  ({unpriced} billed call(s) could not be priced - the real total is higher)"
+    typer.echo(line)
 
 
 @app.command()
@@ -54,9 +111,10 @@ def compare(
     ),
 ):
     """
-    Ask several providers the same question and show every answer side by side.
+    Ask several providers the same question and print every answer in target order.
 
-    Each target makes a real (paid) call, so targets must be given explicitly.
+    Each target makes a real (paid) call, so targets must be given explicitly, and
+    the same provider:model may not be repeated.
     """
     if not target:
         typer.echo(
@@ -95,15 +153,12 @@ def compare(
             bold=True,
         )
 
-    for r in result.successes:
-        typer.echo(f"\n---- {r.provider} / {r.model} ----")
-        typer.echo(r.response_text)
-    for f in result.failures:
-        typer.echo(f"\n---- {f.provider} / {f.model} [FAILED: {f.error_type}] ----")
-        typer.echo(f.message)
-        if f.partial_result is not None:
-            typer.echo("(partial response preserved:)")
-            typer.echo(f.partial_result.response_text)
+    # Render from result.logs, which is in target order. Printing successes first
+    # and failures after would reorder the answers behind the user's back.
+    for log in result.logs:
+        _render_compare_entry(log)
+
+    _render_cost_summary(result.logs)
 
     # The answers above survived the storage fault, but the audit trail did not -
     # say so here, where it cannot scroll past unnoticed during the calls.
@@ -152,7 +207,9 @@ def _snippet(text: str | None, width: int = 80) -> str:
 
 def _render_history_entry(log) -> None:
     """Print one past call as a compact, newest-first history line."""
-    ts = log.created_at.strftime("%Y-%m-%d %H:%M:%S")
+    # Logs are stamped in UTC; show them in local time. astimezone() also does the
+    # right thing for older naive rows, which were written in local time already.
+    ts = log.created_at.astimezone().strftime("%Y-%m-%d %H:%M:%S")
 
     ok = typer.style("OK", fg=typer.colors.GREEN, bold=True)
     fail = typer.style("FAILED", fg=typer.colors.RED, bold=True)
@@ -161,13 +218,13 @@ def _render_history_entry(log) -> None:
     e = typer.style(">> Error", fg=typer.colors.RED, bold=True)
 
     if log.success and log.result is not None:
-        cost = log.result.cost.total_usd if log.result.cost else None
-        cost_str = f"${cost:.6f}" if cost is not None else "-"
-        typer.echo(f"\n[{ts}] {log.provider}/{log.result.model}  {ok}  {cost_str}")
+        typer.echo(f"\n[{ts}] {log.provider}/{log.result.model}  {ok}  {_price(log)}")
         typer.echo(f"{q}: {_snippet(log.user_prompt)}")
         typer.echo(f"{a}: {_snippet(log.result.response_text)}")
     else:
-        typer.echo(f"\n[{ts}] {log.provider}  {fail}")
+        # log.model (the requested one) is the only model a failed run knows.
+        model = log.model or (log.result.model if log.result else None) or "?"
+        typer.echo(f"\n[{ts}] {log.provider}/{model}  {fail}  {_price(log)}")
         typer.echo(f"{q}: {_snippet(log.user_prompt)}")
         typer.echo(f"{e}: {_snippet(log.error_type)}")
 

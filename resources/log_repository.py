@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
@@ -189,7 +189,7 @@ class LogRepository:
                 error_type=type(error).__name__,
                 message=str(error),
                 written_sinks=written,
-                created_at=datetime.now(),
+                created_at=datetime.now(UTC),
             )
             for sink, error in failures
         ]

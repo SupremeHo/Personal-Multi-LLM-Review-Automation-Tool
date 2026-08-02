@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from datetime import timedelta
 
 import pytest
 
@@ -64,6 +65,24 @@ def test_ask_unknown_provider_is_logged_failure(fake_providers):
     assert log.success is False
     assert log.error_type == "KeyError"
     assert log.result is None
+
+
+def test_log_records_the_requested_model_even_when_the_call_fails(fake_providers):
+    # A failed run has no result, so without this the audit row cannot say which
+    # model was attempted - only which provider.
+    ok = svc.ask("s", "q", "good", "m-good", persist=False)
+    failed = svc.ask("s", "q", "fail", "m-bad", persist=False)
+
+    assert ok.model == "m-good"
+    assert failed.model == "m-bad"
+
+
+def test_timestamps_are_timezone_aware_utc(fake_providers):
+    # Naive local stamps cannot be ordered across a DST change; the CLI converts
+    # back to local time for display.
+    log = svc.ask("s", "q", "good", "m", persist=False)
+
+    assert log.created_at.utcoffset() == timedelta(0)
 
 
 def test_ask_billed_parse_failure_is_logged_with_salvage(fake_providers):

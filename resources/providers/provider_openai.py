@@ -52,8 +52,12 @@ class OpenAIProvider:
 
     def _call_api(self, request: LLMRequest) -> Any:
         # >>>>> Paid call. Money is spent here. <<<<<
+        # max_completion_tokens, not the deprecated max_tokens: newer models reject
+        # the old name outright. Without it the request's ceiling silently did not
+        # apply here, unlike Anthropic and Gemini.
         return self._client.chat.completions.create(
             model=request.selected_model,
+            max_completion_tokens=request.max_tokens,
             messages=[
                 {"role": "system", "content": request.system_prompt},
                 {"role": "user", "content": request.user_question},

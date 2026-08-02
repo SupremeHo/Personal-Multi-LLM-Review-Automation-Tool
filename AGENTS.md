@@ -4,7 +4,7 @@
 
 ## What this is
 
-A personal CLI tool that sends a prompt to LLM providers, then logs each response together with token usage, locally-computed cost, and audit metadata into JSONL files and a SQLite database. The end goal is *cross-validation* across multiple models (the "review" in the name): the `compare` command asks several providers the same question and shows every answer side by side. OpenAI and Anthropic providers are implemented; Google/Gemini is a stub. The philosophy is to surface blind spots/counterarguments, not to treat an AI majority vote as truth — the human always makes the final call.
+A personal CLI tool that sends a prompt to LLM providers, then logs each response together with token usage, locally-computed cost, and audit metadata into JSONL files and a SQLite database. The end goal is *cross-validation* across multiple models (the "review" in the name): the `compare` command asks several providers the same question and prints every answer in target order. OpenAI, Anthropic and Google/Gemini providers are all implemented. The philosophy is to surface blind spots/counterarguments, not to treat an AI majority vote as truth — the human always makes the final call.
 
 > **Project context, history & roadmap:** see [docs/PROJECT_NOTES.ko-KR.md](docs/PROJECT_NOTES.ko-KR.md) — the author's development journal (milestones with status, stage-by-stage progress, design decisions, and design questions). Consult it when you need the *why* behind a decision or the planned direction, not just the current code. Note some entries predate the layered refactor below; the code is the source of truth for current structure.
 
@@ -46,7 +46,7 @@ python -m resources.cli history -n 10                                           
 python -m resources.cli history -g <group_id>                                   # only the calls of one comparison batch
 ```
 
-`ask` and `compare` make real (paid) calls. `compare` requires at least one `--target/-t provider:model`, rejects a repeated `provider:model`, and runs the targets in parallel (capped at `call_policy.MAX_PARALLEL_CALLS`) under one shared `group_id` (each target keeps its own `run_id`), so wall time is the slowest call rather than their sum.
+`ask` and `compare` make real (paid) calls. `compare` requires at least one `--target/-t provider:model`, rejects a repeated `provider:model`, and runs the targets in parallel (capped at `call_policy.MAX_PARALLEL_CALLS`) under one shared `group_id` (each target keeps its own `run_id`), so wall time is the slowest call rather than their sum. It prints answers in target order with per-call and total cost, plus the three status axes.
 
 `history` is free — it only reads the local SQLite DB.
 

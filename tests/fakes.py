@@ -51,6 +51,17 @@ def write_price_table(
     return path
 
 
+def _recording(response, calls: list | None):
+    """Return a fake API callable that records the kwargs it was given."""
+
+    def call(**kwargs):
+        if calls is not None:
+            calls.append(kwargs)
+        return response
+
+    return call
+
+
 # --- OpenAI-shaped fakes ----------------------------------------------------
 def make_openai_response(model: str = "gpt-4o-mini", cached: int = 20):
     details = types.SimpleNamespace(cached_tokens=cached)
@@ -67,9 +78,10 @@ def make_openai_response(model: str = "gpt-4o-mini", cached: int = 20):
     )
 
 
-def fake_openai_client(response=None):
+def fake_openai_client(response=None, calls: list | None = None):
+    """Pass ``calls`` to capture the kwargs each request was sent with."""
     response = response or make_openai_response()
-    completions = types.SimpleNamespace(create=lambda **kwargs: response)
+    completions = types.SimpleNamespace(create=_recording(response, calls))
     chat = types.SimpleNamespace(completions=completions)
     return types.SimpleNamespace(chat=chat)
 
@@ -94,9 +106,10 @@ def make_anthropic_response(
     )
 
 
-def fake_anthropic_client(response=None):
+def fake_anthropic_client(response=None, calls: list | None = None):
+    """Pass ``calls`` to capture the kwargs each request was sent with."""
     response = response or make_anthropic_response()
-    messages = types.SimpleNamespace(create=lambda **kwargs: response)
+    messages = types.SimpleNamespace(create=_recording(response, calls))
     return types.SimpleNamespace(messages=messages)
 
 
@@ -118,9 +131,10 @@ def make_google_response(model: str = "gemini-test", cached: int = 15):
     )
 
 
-def fake_google_client(response=None):
+def fake_google_client(response=None, calls: list | None = None):
+    """Pass ``calls`` to capture the kwargs each request was sent with."""
     response = response or make_google_response()
-    models = types.SimpleNamespace(generate_content=lambda **kwargs: response)
+    models = types.SimpleNamespace(generate_content=_recording(response, calls))
     return types.SimpleNamespace(models=models)
 
 
