@@ -73,7 +73,13 @@ def compare(
             raise typer.Exit(code=1)
         targets.append((provider_name, model))
 
-    result = service_ask.compare(system_prompt, user_question, targets)
+    # Rejected targets (e.g. the same provider:model twice) are refused before any
+    # paid call, so this is a usage error to report, not a crash to surface.
+    try:
+        result = service_ask.compare(system_prompt, user_question, targets)
+    except ValueError as e:
+        typer.echo(f"[cli.py] {e}")
+        raise typer.Exit(code=1) from e
 
     typer.echo(f"\n==== Comparison (group {result.group_id}) ====")
     for r in result.successes:

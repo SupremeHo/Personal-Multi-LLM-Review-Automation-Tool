@@ -7,6 +7,12 @@ import threading
 
 import pytest
 
+from resources.call_policy import (
+    CONNECT_TIMEOUT_SEC,
+    MAX_PARALLEL_CALLS,
+    MAX_RETRIES,
+    READ_TIMEOUT_SEC,
+)
 from resources.log_repository import JsonlLogWriter, LogRepository
 from resources.providers import registry
 from resources.services import service_ask as svc
@@ -14,6 +20,7 @@ from tests.fakes import (
     BadResultProvider,
     BadSalvageProvider,
     BarrierProvider,
+    ConcurrencyProbeProvider,
     FailProvider,
     GoodProvider,
     PaidFailProvider,
@@ -214,6 +221,39 @@ def test_compare_keeps_salvage_of_an_unparsable_billed_response(fake_providers):
     assert failure.provider == "parsefail"
     assert failure.partial_result is None
     assert failure.salvage.failed_stage == "parse"
+
+
+def test_compare_rejects_duplicate_targets(fake_providers):
+    # Asking the same model twice buys a second billed answer that would inflate
+    # the quorum with a correlated opinion. Refused before anything is paid for.
+    with pytest.raises(ValueError, match="Duplicate compare targets"):
+        svc.compare(
+            "s", "q", [("good", "m1"), ("good", "m1"), ("fail", "m2")], persist=False
+        )
+
+
+def test_compare_caps_the_number_of_parallel_calls(monkeypatch):
+    # --target is repeatable with no limit, so an uncapped pool turns a typo into a
+    # burst of concurrent requests. Every target still runs, just not all at once.
+    probe = ConcurrencyProbeProvider()
+    monkeypatch.setattr(registry, "PROVIDERS", {"probe": probe})
+    targets = [("probe", f"m{i}") for i in range(MAX_PARALLEL_CALLS + 3)]
+
+    result = svc.compare("s", "q", targets, persist=False)
+
+    assert len(result.successes) == len(targets)  # nothing is dropped by the cap
+    assert probe.peak <= MAX_PARALLEL_CALLS
+    assert probe.peak > 1  # ...and the calls are still parallel
+
+
+def test_log_records_the_policy_a_call_was_made_under(fake_providers):
+    # "Timed out" means something different under a 10s budget than a 300s one, so
+    # the budget in effect travels with the log.
+    log = svc.ask("s", "q", "good", "m", persist=False)
+
+    assert log.policy.connect_timeout_sec == CONNECT_TIMEOUT_SEC
+    assert log.policy.read_timeout_sec == READ_TIMEOUT_SEC
+    assert log.policy.max_retries == MAX_RETRIES
 
 
 def test_compare_runs_targets_concurrently(monkeypatch):

@@ -10,6 +10,7 @@ from typing import Any
 import anthropic
 from anthropic import Anthropic
 
+from resources.call_policy import HTTP_TIMEOUT, MAX_RETRIES
 from resources.providers.runner import ParsedResponse, run_chat
 from resources.schemas import LLMCallResult, LLMRequest, TokenUsageInfo
 
@@ -17,9 +18,11 @@ PRICE_DIR = Path(__file__).resolve().parent.parent.parent / "config" / "prices"
 PRICE_PATH_ANTHROPIC = PRICE_DIR / "prices_claude.json"
 
 # Constructed at import time; set to None if the key/init fails so a missing key
-# disables this provider instead of crashing the whole tool.
+# disables this provider instead of crashing the whole tool. Timeout and retry
+# budget are stated explicitly (see call_policy) rather than left to the SDK's
+# 10-minute default, which would hold a whole comparison hostage.
 try:
-    _default_client = Anthropic()
+    _default_client = Anthropic(timeout=HTTP_TIMEOUT, max_retries=MAX_RETRIES)
 except anthropic.AnthropicError:
     _default_client = None
 

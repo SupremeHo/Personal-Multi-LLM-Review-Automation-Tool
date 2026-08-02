@@ -225,6 +225,29 @@ class BarrierProvider:
         return make_result(request, self.provider_name)
 
 
+class ConcurrencyProbeProvider:
+    """Records how many calls were ever in flight at the same time."""
+
+    provider_name = "probe"
+
+    def __init__(self, delay: float = 0.05):
+        self._delay = delay
+        self._lock = threading.Lock()
+        self._in_flight = 0
+        self.peak = 0
+
+    def ask(self, request: LLMRequest) -> LLMCallResult:
+        with self._lock:
+            self._in_flight += 1
+            self.peak = max(self.peak, self._in_flight)
+        try:
+            time.sleep(self._delay)  # hold the slot so overlap is observable
+        finally:
+            with self._lock:
+                self._in_flight -= 1
+        return make_result(request, self.provider_name)
+
+
 class SlowProvider:
     """Answers after a delay, to check result order does not follow latency."""
 

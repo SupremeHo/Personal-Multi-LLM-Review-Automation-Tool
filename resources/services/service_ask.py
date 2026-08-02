@@ -17,11 +17,18 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+from resources.call_policy import (
+    CONNECT_TIMEOUT_SEC,
+    MAX_PARALLEL_CALLS,
+    MAX_RETRIES,
+    READ_TIMEOUT_SEC,
+)
 from resources.diagnostics import print_error
 from resources.log_repository import default_repository
 from resources.providers.registry import get_provider
 from resources.providers.response_error import PaidResponseError
 from resources.schemas import (
+    CallPolicyInfo,
     ErrorInfo,
     LLMCallLog,
     LLMCallResult,
@@ -32,6 +39,15 @@ from resources.schemas import (
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DB_PATH = BASE_DIR / "_db" / "llm_responses.db"
+
+
+def _current_policy() -> CallPolicyInfo:
+    """Snapshot the configured resource policy for the audit log."""
+    return CallPolicyInfo(
+        connect_timeout_sec=CONNECT_TIMEOUT_SEC,
+        read_timeout_sec=READ_TIMEOUT_SEC,
+        max_retries=MAX_RETRIES,
+    )
 
 
 def make_request(
@@ -122,6 +138,7 @@ def run_request(
         "elapsed_sec": None,
         "result": None,
         "salvage": None,
+        "policy": _current_policy(),
     }
 
     start_time = time.perf_counter()
@@ -264,7 +281,11 @@ def compare(
     calls: persistence stays on this thread - see the loop comment below.
 
     Args:
-      targets: list of (provider_name, selected_model) pairs.
+      targets: list of (provider_name, selected_model) pairs. Must be distinct.
+
+    Raises:
+      ValueError: The same provider:model appears twice. This is checked before any
+        paid call, so it costs nothing.
     """
     group_id = str(uuid4())
     created_at = datetime.now()
@@ -272,6 +293,20 @@ def compare(
 
     if not targets:
         return outcome
+
+    # Asking one model the same question twice is not cross-validation: it buys a
+    # second billed answer that inflates the quorum with a correlated opinion. Reject
+    # it here, while it is still free.
+    duplicates = sorted({t for t in targets if targets.count(t) > 1})
+    if duplicates:
+        listed = ", ".join(f"{provider}:{model}" for provider, model in duplicates)
+        message = (
+            f"Duplicate compare targets are rejected: {listed}. "
+            "Each provider:model may appear only once - a repeated model would be "
+            "billed twice and counted twice toward the quorum."
+        )
+        print_error(message, module="service_ask.py", func="compare")
+        raise ValueError(message)
 
     # Ids and requests are minted here, on the calling thread, exactly as before,
     # so a malformed target still fails right here instead of inside a worker.
@@ -290,7 +325,12 @@ def compare(
     # Only the blocking API calls run in parallel; run_request() turns every
     # outcome into an LLMCallLog and never raises (see _assemble_log), so a worker
     # cannot break the pool. Collection guards each future anyway - see below.
-    with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+    #
+    # The pool is capped (call_policy.MAX_PARALLEL_CALLS): --target is repeatable
+    # with no limit, and one worker per target turns a typo into a burst of
+    # concurrent requests. Sharing one provider instance across these threads is
+    # safe - see the ChatProvider contract.
+    with ThreadPoolExecutor(max_workers=min(len(jobs), MAX_PARALLEL_CALLS)) as pool:
         futures = [
             pool.submit(
                 run_request, run_id, request, provider_name, created_at, group_id
@@ -335,6 +375,7 @@ def compare(
                         "elapsed_sec": None,  # the worker died before reporting one
                         "result": None,
                         "salvage": None,
+                        "policy": _current_policy(),
                     }
                 )
 

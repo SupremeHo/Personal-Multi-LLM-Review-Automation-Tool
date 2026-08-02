@@ -31,7 +31,13 @@ class ChatProvider(Protocol):
     (``ErrorInfo``) is solely the service layer's job in the multi-compare flow,
     keeping this contract free of the exceptions-vs-data mix.
 
-    The call is synchronous, matching the rest of the codebase.
+    The call is synchronous, matching the rest of the codebase, and ``ask()`` must
+    be **safe to call concurrently**: the registry holds one instance per provider
+    and ``compare`` calls it from several threads at once. The bundled providers
+    satisfy this by holding only immutable state after construction (an SDK client
+    and a price path), and the OpenAI/Anthropic/Gemini clients are themselves
+    thread-safe. A provider that caches mutable per-call state on ``self`` would
+    break that and must not be added without a lock.
     """
 
     provider_name: str

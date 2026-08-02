@@ -10,6 +10,7 @@ from typing import Any
 from google import genai
 from google.genai import types
 
+from resources.call_policy import MAX_RETRIES, TOTAL_TIMEOUT_MS
 from resources.providers.runner import ParsedResponse, run_chat
 from resources.schemas import LLMCallResult, LLMRequest, TokenUsageInfo
 
@@ -17,9 +18,17 @@ PRICE_DIR = Path(__file__).resolve().parent.parent.parent / "config" / "prices"
 PRICE_PATH_GOOGLE = PRICE_DIR / "prices_gemini.json"
 
 # Constructed at import time; set to None if the key/init fails so a missing key
-# disables this provider instead of crashing the whole tool.
+# disables this provider instead of crashing the whole tool. Timeout and retry
+# budget are stated explicitly (see call_policy). Two Gemini-specific quirks: the
+# timeout is a single millisecond value (no connect/read split), and `attempts`
+# counts the FIRST call too, so it is the retry budget plus one.
 try:
-    _default_client = genai.Client()
+    _default_client = genai.Client(
+        http_options=types.HttpOptions(
+            timeout=TOTAL_TIMEOUT_MS,
+            retry_options=types.HttpRetryOptions(attempts=MAX_RETRIES + 1),
+        )
+    )
 except ValueError:
     _default_client = None
 

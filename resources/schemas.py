@@ -201,6 +201,31 @@ class SalvageInfo(BaseModel):
     """
 
 
+class CallPolicyInfo(BaseModel):
+    """
+    The timeout and retry budget a call was made under.
+
+    Recorded so a failure stays interpretable later: "timed out" means something
+    different under a 10-second budget than under a 300-second one, and the numbers
+    in call_policy.py will change over time while old logs must still be readable.
+
+    This is the *configured* policy for the process (see `resources/call_policy.py`),
+    not a measurement - the SDKs do not report how many attempts a call actually
+    took, and a provider constructed with a custom client may not follow it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    connect_timeout_sec: float
+    """Handshake budget; expiring here means nothing was billed."""
+
+    read_timeout_sec: float
+    """Response-body budget; expiring here can mean a billed response was lost."""
+
+    max_retries: int
+    """Retries the SDK may make after the first attempt. Never applied post-billing."""
+
+
 class LLMCallLog(BaseModel):
     """
     Define a Pydantic model to represent the log of an LLM's call.
@@ -254,6 +279,9 @@ class LLMCallLog(BaseModel):
     Set only when the paid call went through but a later step failed without
     leaving an LLMCallResult, so a failed run still records that money was spent.
     """
+
+    policy: CallPolicyInfo | None = None
+    """Timeout/retry budget in effect for this call; None on logs written before it existed."""
 
 
 class ErrorInfo(BaseModel):

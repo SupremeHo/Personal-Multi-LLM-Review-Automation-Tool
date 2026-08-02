@@ -89,6 +89,7 @@
 - **유료 호출 전 preflight 검증**(가격표 존재·파싱·모델명) → 비용 낭비 0.
 - **감사 로그는 항상 기록.** `log_data`를 try 밖에서 1회 생성, latency를 finally에서 측정(성공/실패 무관), `error_type` 항상 기록. 실패 run도 `runs` 행은 남김(`model_responses`는 건너뜀). 로그 조립(`_assemble_log`) 자체도 예외를 던지지 않는다 — 조립 실패 시 provider가 준 `result`/`salvage` 중 형식이 깨진 쪽만 버리고 `error_type="LogAssemblyError"`로 기록. *(2026.08.01: `LLMCallLog(**log_data)`가 try 밖에 있어 워커에서 터지면 compare의 나머지 유료 응답까지 유실되던 문제 수정. `future.result()`도 개별 격리.)*
 - **비용 미산정은 `cost=None`**으로 표현(가짜 0원 센티넬 금지 — 감사 로그 오염 방지).
+- **자원 정책은 물려받지 않고 명시한다** *(2026.08.01 추가)*. `call_policy.py` 한 곳에 모으고, 값은 지연시간이 아니라 과금 불변식 기준으로 정한다: connect 10초(아직 과금 전이라 포기해도 손해 없음) / read 300초(이 시점엔 이미 생성 중이라 끊으면 낸 돈을 버림). `MAX_RETRIES=2`는 SDK 기본값을 명시한 것이며 — **애플리케이션 재시도를 그 위에 얹지 말 것**(예산이 조용히 2배가 됨), 과금 이후 단계는 절대 재시도하지 않는다. `MAX_PARALLEL_CALLS=5`로 풀 상한. `compare`는 **동일 `provider:model` 중복 타겟을 유료 호출 전에 거부**한다(같은 모델 두 번 = 두 번 과금 + 정족수에 상관된 표 하나 추가). 모든 로그에 `CallPolicyInfo` 스냅샷을 남기되, 이는 *예산* 기록이지 실제 시도 횟수가 아니다(SDK가 알려주지 않음).
 - **저장은 부수효과이지 관문이 아니다.** `LogRepository.save()`는 sink별로 독립 시도하고 실패를 `PersistenceErrorInfo`로 반환한다(예외 전파 X). 각 실패는 성공한 sink 목록(`written_sinks`)을 함께 담아 JSONL/SQLite 불일치를 기록한다. `compare`는 이를 `CompareResult.persist_errors`에 모으고(`failures`와 분리 — DB 잠김은 실패한 호출이 아니다), CLI가 답변 뒤에 경고로 출력한다. *(2026.08.01: 저장 실패가 나머지 유료 응답까지 유실시키던 문제 수정.)*
 
 ### 2단계 — 다중 API 호출 / SOLID 리팩토링 (2026.06.25 ~ 진행 중)
