@@ -73,6 +73,7 @@ def run_request(
         "error_type": None,
         "elapsed_sec": None,
         "result": None,
+        "salvage": None,
     }
 
     start_time = time.perf_counter()
@@ -84,8 +85,11 @@ def run_request(
 
     except PaidResponseError as e:
         # The paid call succeeded but a later step failed. Judge the run a failure,
-        # yet preserve the response/tokens already paid for so no billed call goes unlogged.
+        # yet preserve whatever survived so no billed call goes unlogged: the full
+        # response when only cost calculation broke, otherwise the salvage
+        # diagnostics proving the money was spent.
         log_data["result"] = e.result
+        log_data["salvage"] = e.salvage
         log_data["error"] = str(e.original)
         log_data["error_type"] = type(e.original).__name__
 
@@ -246,6 +250,7 @@ def compare(
                         message=log.error or "",
                         elapsed_sec=log.elapsed_sec,
                         partial_result=log.result,  # salvaged PaidResponseError result, if any
+                        salvage=log.salvage,  # diagnostics when even parsing failed
                         created_at=created_at,
                     )
                 )

@@ -9,7 +9,7 @@ import types
 from pathlib import Path
 
 from resources.providers.response_error import PaidResponseError
-from resources.schemas import LLMCallResult, LLMRequest, TokenUsageInfo
+from resources.schemas import LLMCallResult, LLMRequest, SalvageInfo, TokenUsageInfo
 
 
 # --- price tables -----------------------------------------------------------
@@ -144,11 +144,37 @@ class FailProvider:
 
 
 class PaidFailProvider:
+    """Billed, then cost calculation broke: the response itself is still intact."""
+
     provider_name = "paidfail"
 
     def ask(self, request: LLMRequest) -> LLMCallResult:
         raise PaidResponseError(
-            make_result(request, "paidfail"), ValueError("cost broke")
+            ValueError("cost broke"),
+            result=make_result(request, "paidfail"),
+            salvage=SalvageInfo(
+                failed_stage="cost",
+                provider="paidfail",
+                requested_model=request.selected_model,
+            ),
+        )
+
+
+class ParseFailProvider:
+    """Billed, then parsing broke: nothing but the salvage diagnostics survives."""
+
+    provider_name = "parsefail"
+
+    def ask(self, request: LLMRequest) -> LLMCallResult:
+        raise PaidResponseError(
+            AttributeError("response shape changed"),
+            salvage=SalvageInfo(
+                failed_stage="parse",
+                provider="parsefail",
+                requested_model=request.selected_model,
+                raw_response_id="raw-parsefail",
+                raw_usage={"input_tokens": 7},
+            ),
         )
 
 

@@ -14,6 +14,7 @@ from tests.fakes import (
     FailProvider,
     GoodProvider,
     PaidFailProvider,
+    ParseFailProvider,
     SlowProvider,
 )
 
@@ -24,6 +25,7 @@ def fake_providers(monkeypatch):
         "good": GoodProvider(),
         "fail": FailProvider(),
         "paidfail": PaidFailProvider(),
+        "parsefail": ParseFailProvider(),
     }
     monkeypatch.setattr(registry, "PROVIDERS", providers)
     return providers
@@ -42,6 +44,41 @@ def test_ask_unknown_provider_is_logged_failure(fake_providers):
     assert log.success is False
     assert log.error_type == "KeyError"
     assert log.result is None
+
+
+def test_ask_billed_parse_failure_is_logged_with_salvage(fake_providers):
+    # A post-billing parse failure has no result to keep, so without salvage the
+    # log would be indistinguishable from a call that never reached the API.
+    log = svc.ask("s", "q", "parsefail", "m", persist=False)
+
+    assert log.success is False
+    assert log.result is None
+    assert log.error_type == "AttributeError"
+    assert log.salvage is not None
+    assert log.salvage.failed_stage == "parse"
+    assert log.salvage.raw_response_id == "raw-parsefail"
+
+
+def test_billed_parse_failure_survives_persistence_round_trip(
+    monkeypatch, tmp_path, temp_db
+):
+    monkeypatch.setattr(registry, "PROVIDERS", {"parsefail": ParseFailProvider()})
+    monkeypatch.setattr(svc, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(svc, "DB_PATH", temp_db)
+
+    svc.ask("s", "q", "parsefail", "m")
+
+    conn = sqlite3.connect(temp_db)
+    try:
+        # A failed run keeps its runs row and skips model_responses (no result).
+        assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 1
+        assert conn.execute("SELECT count(*) FROM model_responses").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+    (stored,) = svc.read_history(limit=5)
+    assert stored.salvage.failed_stage == "parse"
+    assert stored.salvage.raw_usage == {"input_tokens": 7}
 
 
 def test_compare_collects_successes_and_failures(fake_providers):
@@ -63,6 +100,17 @@ def test_compare_collects_successes_and_failures(fake_providers):
     # PaidResponseError keeps the billed response as data.
     assert by_provider["paidfail"].partial_result is not None
     assert by_provider["paidfail"].partial_result.response_text == "ok"
+
+
+def test_compare_keeps_salvage_of_an_unparsable_billed_response(fake_providers):
+    # Aggregation must not drop what the paid call left behind when there is no
+    # partial_result to carry - otherwise compare() discards a billed response.
+    result = svc.compare("s", "q", [("good", "m1"), ("parsefail", "m2")], persist=False)
+
+    (failure,) = result.failures
+    assert failure.provider == "parsefail"
+    assert failure.partial_result is None
+    assert failure.salvage.failed_stage == "parse"
 
 
 def test_compare_runs_targets_concurrently(monkeypatch):

@@ -21,10 +21,11 @@ class ChatProvider(Protocol):
     * Success → return an :class:`LLMCallResult`.
     * Failure *before* billing (e.g. missing client, preflight pricing failure)
       → raise a plain exception. No money was spent, nothing to preserve.
-    * Failure *after* billing (e.g. cost calculation on an already-charged
-      response) → raise
+    * Failure *after* billing (parsing, cost calculation, or result validation on
+      an already-charged response) → raise
       :class:`resources.providers.response_error.PaidResponseError`, carrying the
-      salvaged ``LLMCallResult`` so a billed response is never discarded.
+      salvaged ``LLMCallResult`` when one could still be assembled and
+      ``SalvageInfo`` otherwise, so a billed response is never discarded.
 
     A provider never returns an error as data. Turning a failure into a value
     (``ErrorInfo``) is solely the service layer's job in the multi-compare flow,
@@ -50,7 +51,8 @@ class ChatProvider(Protocol):
 
         Raises:
           PaidResponseError: A response was billed but a later, non-billing step
-            failed; the partial result is attached for the caller to persist.
+            failed; the partial result and/or salvage diagnostics are attached
+            for the caller to persist.
           Exception: Any pre-billing failure.
         """
         ...
