@@ -28,12 +28,15 @@ from resources.log_repository import default_repository
 from resources.providers.registry import get_provider
 from resources.providers.response_error import PaidResponseError
 from resources.schemas import (
+    AuditStatus,
     CallPolicyInfo,
+    CollectionStatus,
     ErrorInfo,
     LLMCallLog,
     LLMCallResult,
     LLMRequest,
     PersistenceErrorInfo,
+    PersistenceStatus,
     SalvageInfo,
 )
 
@@ -237,6 +240,17 @@ def ask(
     return log
 
 
+QUORUM = 2
+"""
+Usable answers a batch needs before it is a comparison at all.
+
+One answer has nothing to be compared against, so a lone success is not a weak
+comparison - it is not one. Deliberately a fixed constant: varying the quorum by
+question risk requires someone to judge that risk first, and who does the judging
+is still an open design question, not something to default.
+"""
+
+
 @dataclass
 class CompareResult:
     """
@@ -248,6 +262,12 @@ class CompareResult:
     `persist_errors` keeps archiving faults apart from provider faults: a locked
     database says nothing about the quality of the answers, so it must not be
     counted as a failed call.
+
+    State is reported on three independent axes, because one label cannot carry
+    them: whether enough answers came back (`collection_status`), whether the
+    spend behind them is fully accounted for (`audit_status`), and whether the
+    record of it reached disk (`persistence_status`). A batch can easily be
+    complete on one and not the others.
     """
 
     group_id: str
@@ -255,6 +275,71 @@ class CompareResult:
     successes: list[LLMCallResult] = field(default_factory=list)
     failures: list[ErrorInfo] = field(default_factory=list)
     persist_errors: list[PersistenceErrorInfo] = field(default_factory=list)
+    persist_attempted: bool = True
+    """False when the caller passed persist=False, so 'nothing failed' is not read as 'stored'."""
+
+    @property
+    def usable_responses(self) -> list[LLMCallResult]:
+        """
+        The answers that can actually go into a cross-check, in target order.
+
+        Not the same as `successes`, in both directions:
+
+        * A response billed and then lost at cost calculation (PaidResponseError)
+          is counted here. Its body and token usage are intact - only the price tag
+          is missing - so leaving it out would silently drop an answer we paid for
+          and shrink the quorum for a bookkeeping reason.
+        * A response with nothing to read - parsing failed, or the model returned
+          an empty body - is not counted, however the call itself was judged. An
+          empty answer padding the quorum is exactly the false confidence this tool
+          exists to prevent.
+        """
+        return [
+            log.result
+            for log in self.logs
+            if log.result is not None and log.result.response_text.strip()
+        ]
+
+    @property
+    def collection_status(self) -> CollectionStatus:
+        """complete = every target usable; partial = quorum met; insufficient = below quorum."""
+        usable = len(self.usable_responses)
+        if usable < QUORUM:
+            return "insufficient"
+        return "complete" if usable == len(self.logs) else "partial"
+
+    @property
+    def audit_status(self) -> AuditStatus:
+        """
+        Whether everything billed in this batch is fully accounted for.
+
+        Degraded when money was spent without a complete record of it: a usable
+        answer whose cost could not be computed, or a billed response that never
+        parsed and left only salvage diagnostics.
+        """
+        if any(result.cost is None for result in self.usable_responses):
+            return "degraded"
+        if any(failure.salvage is not None for failure in self.failures):
+            return "degraded"
+        return "clean"
+
+    @property
+    def persistence_status(self) -> PersistenceStatus | None:
+        """
+        Whether this batch's audit trail reached storage.
+
+        None when persistence was never attempted (persist=False) - reporting
+        "complete" for an archive nobody wrote would be the kind of quiet false
+        claim this three-axis split exists to remove.
+        """
+        if not self.persist_attempted:
+            return None
+        if not self.persist_errors:
+            return "complete"
+
+        # An error carrying no written_sinks means that run landed nowhere at all.
+        stored_nowhere = {e.run_id for e in self.persist_errors if not e.written_sinks}
+        return "failed" if len(stored_nowhere) == len(self.logs) else "partial"
 
 
 def compare(
@@ -289,7 +374,7 @@ def compare(
     """
     group_id = str(uuid4())
     created_at = datetime.now()
-    outcome = CompareResult(group_id=group_id)
+    outcome = CompareResult(group_id=group_id, persist_attempted=persist)
 
     if not targets:
         return outcome

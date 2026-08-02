@@ -9,7 +9,13 @@ import types
 from pathlib import Path
 
 from resources.providers.response_error import PaidResponseError
-from resources.schemas import LLMCallResult, LLMRequest, SalvageInfo, TokenUsageInfo
+from resources.schemas import (
+    CostInfo,
+    LLMCallResult,
+    LLMRequest,
+    SalvageInfo,
+    TokenUsageInfo,
+)
 
 
 # --- price tables -----------------------------------------------------------
@@ -119,13 +125,31 @@ def fake_google_client(response=None):
 
 
 # --- fake ChatProviders (for registry/service tests) ------------------------
-def make_result(request: LLMRequest, provider: str = "fake", text: str = "ok"):
+def make_result(
+    request: LLMRequest,
+    provider: str = "fake",
+    text: str = "ok",
+    *,
+    costed: bool = True,
+):
+    """
+    Build a result for a fake provider.
+
+    Costed by default, so a batch of healthy fakes reports a clean audit status.
+    Pass costed=False for the billed-but-uncosted case (PaidResponseError).
+    """
+    cost = (
+        CostInfo(input_usd=0.0001, output_usd=0.0002, total_usd=0.0003, estimated=True)
+        if costed
+        else None
+    )
     return LLMCallResult(
         response_id=request.response_id,
         provider=provider,
         model=request.selected_model,
         response_text=text,
         usage=TokenUsageInfo(input_tokens=1, output_tokens=1, total_tokens=2),
+        cost=cost,
     )
 
 
@@ -143,6 +167,15 @@ class FailProvider:
         raise RuntimeError("boom")
 
 
+class EmptyAnswerProvider:
+    """A call that succeeds and bills, but returns nothing to compare."""
+
+    provider_name = "empty"
+
+    def ask(self, request: LLMRequest) -> LLMCallResult:
+        return make_result(request, "empty", text="   ")
+
+
 class PaidFailProvider:
     """Billed, then cost calculation broke: the response itself is still intact."""
 
@@ -151,7 +184,7 @@ class PaidFailProvider:
     def ask(self, request: LLMRequest) -> LLMCallResult:
         raise PaidResponseError(
             ValueError("cost broke"),
-            result=make_result(request, "paidfail"),
+            result=make_result(request, "paidfail", costed=False),
             salvage=SalvageInfo(
                 failed_stage="cost",
                 provider="paidfail",
@@ -201,7 +234,7 @@ class BadSalvageProvider:
     def ask(self, request: LLMRequest) -> LLMCallResult:
         raise PaidResponseError(
             ValueError("cost broke"),
-            result=make_result(request, "badsalvage"),
+            result=make_result(request, "badsalvage", costed=False),
             salvage="not a salvage object",
         )
 

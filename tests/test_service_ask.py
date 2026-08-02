@@ -21,6 +21,7 @@ from tests.fakes import (
     BadSalvageProvider,
     BarrierProvider,
     ConcurrencyProbeProvider,
+    EmptyAnswerProvider,
     FailProvider,
     GoodProvider,
     PaidFailProvider,
@@ -221,6 +222,96 @@ def test_compare_keeps_salvage_of_an_unparsable_billed_response(fake_providers):
     assert failure.provider == "parsefail"
     assert failure.partial_result is None
     assert failure.salvage.failed_stage == "parse"
+
+
+def test_usable_responses_include_a_billed_but_uncosted_answer(fake_providers):
+    # A PaidResponseError partial has an intact body - only its price tag is
+    # missing - so excluding it would shrink the quorum for a bookkeeping reason.
+    result = svc.compare("s", "q", [("good", "m1"), ("paidfail", "m2")], persist=False)
+
+    assert len(result.successes) == 1  # the call is still judged a failure...
+    assert [r.provider for r in result.usable_responses] == ["good", "paidfail"]
+    assert result.collection_status == "complete"  # ...but the batch is comparable
+    assert result.audit_status == "degraded"  # spend that could not be costed
+
+
+def test_usable_responses_exclude_a_body_that_cannot_be_read(fake_providers):
+    # Parsing failed: money was spent but there is no answer to compare.
+    result = svc.compare("s", "q", [("good", "m1"), ("parsefail", "m2")], persist=False)
+
+    assert [r.provider for r in result.usable_responses] == ["good"]
+    assert result.collection_status == "insufficient"
+    assert result.audit_status == "degraded"  # billed, never accounted for
+
+
+def test_usable_responses_exclude_an_empty_answer(monkeypatch):
+    # An empty body padding the quorum is exactly the false confidence this tool
+    # exists to prevent, however successful the call was judged.
+    monkeypatch.setattr(
+        registry, "PROVIDERS", {"good": GoodProvider(), "empty": EmptyAnswerProvider()}
+    )
+
+    result = svc.compare("s", "q", [("good", "m1"), ("empty", "m2")], persist=False)
+
+    assert len(result.successes) == 2  # both calls worked...
+    assert [r.provider for r in result.usable_responses] == ["good"]
+    assert result.collection_status == "insufficient"  # ...but there is no comparison
+
+
+def test_a_lone_success_is_insufficient_not_complete(fake_providers):
+    # One answer has nothing to be compared against.
+    result = svc.compare("s", "q", [("good", "m1")], persist=False)
+
+    assert result.successes  # the call was fine
+    assert result.collection_status == "insufficient"
+
+
+def test_collection_status_is_partial_when_the_quorum_survives_a_failure(
+    fake_providers,
+):
+    result = svc.compare(
+        "s", "q", [("good", "m1"), ("good", "m2"), ("fail", "m3")], persist=False
+    )
+
+    assert len(result.usable_responses) == 2
+    assert result.collection_status == "partial"
+    assert result.audit_status == "clean"  # a call that never billed is not a gap
+
+
+def test_persistence_status_is_none_when_archiving_was_not_attempted(fake_providers):
+    # "complete" would be a false claim about an archive nobody wrote.
+    result = svc.compare("s", "q", [("good", "m1"), ("good", "m2")], persist=False)
+
+    assert result.persistence_status is None
+
+
+def test_persistence_status_reports_a_partial_archive(monkeypatch, tmp_path):
+    monkeypatch.setattr(registry, "PROVIDERS", {"good": GoodProvider()})
+    monkeypatch.setattr(
+        svc,
+        "default_repository",
+        lambda base_dir, db_path: LogRepository(
+            [JsonlLogWriter(tmp_path), _UnavailableSqlite()]
+        ),
+    )
+
+    result = svc.compare("s", "q", [("good", "m1"), ("good", "m2")])
+
+    assert result.persistence_status == "partial"  # JSONL landed, SQLite did not
+    assert result.collection_status == "complete"  # and the answers are unaffected
+
+
+def test_persistence_status_is_failed_when_nothing_landed(monkeypatch):
+    monkeypatch.setattr(registry, "PROVIDERS", {"good": GoodProvider()})
+    monkeypatch.setattr(
+        svc,
+        "default_repository",
+        lambda base_dir, db_path: LogRepository([_UnavailableSqlite()]),
+    )
+
+    result = svc.compare("s", "q", [("good", "m1"), ("good", "m2")])
+
+    assert result.persistence_status == "failed"
 
 
 def test_compare_rejects_duplicate_targets(fake_providers):

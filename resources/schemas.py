@@ -6,6 +6,25 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
+CollectionStatus = Literal["complete", "partial", "insufficient"]
+"""
+How much of a comparison actually came back, measured in *usable answers*.
+
+`insufficient` (not "failed") because the calls may all have succeeded and the
+batch still not be a comparison - one answer has nothing to be compared against.
+"""
+
+AuditStatus = Literal["clean", "degraded"]
+"""
+Whether the money ledger for a batch is complete.
+
+`degraded` means something was billed but not fully accounted for. It says nothing
+about answer quality, and must never be read as one.
+"""
+
+PersistenceStatus = Literal["complete", "partial", "failed"]
+"""Whether the audit trail for a batch reached storage. Independent of the two above."""
+
 
 class TokenUsageInfo(BaseModel):
     """
