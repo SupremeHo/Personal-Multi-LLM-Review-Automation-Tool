@@ -47,6 +47,7 @@ DB_PATH = BASE_DIR / "_db" / "llm_responses.db"
 def _current_policy() -> CallPolicyInfo:
     """Snapshot the configured resource policy for the audit log."""
     return CallPolicyInfo(
+        max_parallel_calls=MAX_PARALLEL_CALLS,
         connect_timeout_sec=CONNECT_TIMEOUT_SEC,
         read_timeout_sec=READ_TIMEOUT_SEC,
         max_retries=MAX_RETRIES,

@@ -235,6 +235,9 @@ class CallPolicyInfo(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    max_parallel_calls: int
+    """Ceiling on simultaneous provider calls in one `compare`."""
+
     connect_timeout_sec: float
     """Handshake budget; expiring here means nothing was billed."""
 
