@@ -25,6 +25,10 @@ class PaidResponseError(Exception):
         result: LLMCallResult | None = None,
         salvage: SalvageInfo | None = None,
     ):
+        if result is None and salvage is None:
+            raise ValueError(
+                "PaidResponseError requires result or salvage to preserve."
+            )
         # The underlying failure that happened after billing.
         self.original = original
         # The response/tokens that were already paid for, if still assembled.
