@@ -21,16 +21,23 @@ class ChatProvider(Protocol):
     * Success → return an :class:`LLMCallResult`.
     * Failure *before* billing (e.g. missing client, preflight pricing failure)
       → raise a plain exception. No money was spent, nothing to preserve.
-    * Failure *after* billing (e.g. cost calculation on an already-charged
-      response) → raise
+    * Failure *after* billing (parsing, cost calculation, or result validation on
+      an already-charged response) → raise
       :class:`resources.providers.response_error.PaidResponseError`, carrying the
-      salvaged ``LLMCallResult`` so a billed response is never discarded.
+      salvaged ``LLMCallResult`` when one could still be assembled and
+      ``SalvageInfo`` otherwise, so a billed response is never discarded.
 
     A provider never returns an error as data. Turning a failure into a value
     (``ErrorInfo``) is solely the service layer's job in the multi-compare flow,
     keeping this contract free of the exceptions-vs-data mix.
 
-    The call is synchronous, matching the rest of the codebase.
+    The call is synchronous, matching the rest of the codebase, and ``ask()`` must
+    be **safe to call concurrently**: the registry holds one instance per provider
+    and ``compare`` calls it from several threads at once. The bundled providers
+    satisfy this by holding only immutable state after construction (an SDK client
+    and a price path), and the OpenAI/Anthropic/Gemini clients are themselves
+    thread-safe. A provider that caches mutable per-call state on ``self`` would
+    break that and must not be added without a lock.
     """
 
     provider_name: str
@@ -50,7 +57,8 @@ class ChatProvider(Protocol):
 
         Raises:
           PaidResponseError: A response was billed but a later, non-billing step
-            failed; the partial result is attached for the caller to persist.
+            failed; the partial result and/or salvage diagnostics are attached
+            for the caller to persist.
           Exception: Any pre-billing failure.
         """
         ...

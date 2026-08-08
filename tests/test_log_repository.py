@@ -67,19 +67,65 @@ def test_jsonl_writer_writes_per_provider_file(tmp_path):
     assert record["provider"] == "anthropic"
 
 
+class _Recorder:
+    """A writer that just notes it was called."""
+
+    def __init__(self, sink_name: str, seen: list[tuple[str, str]]):
+        self.sink_name = sink_name
+        self._seen = seen
+
+    def write(self, log: LLMCallLog) -> None:
+        self._seen.append((self.sink_name, log.run_id))
+
+
+class _BoomWriter:
+    """A writer whose destination is unavailable (full disk, locked db, ...)."""
+
+    def __init__(self, sink_name: str):
+        self.sink_name = sink_name
+
+    def write(self, log: LLMCallLog) -> None:
+        raise OSError(f"{self.sink_name} is unavailable")
+
+
 def test_repository_fans_out_to_all_writers_in_order():
     seen: list[tuple[str, str]] = []
 
-    class Recorder:
-        def __init__(self, tag: str):
-            self.tag = tag
-
-        def write(self, log: LLMCallLog) -> None:
-            seen.append((self.tag, log.run_id))
-
-    LogRepository([Recorder("a"), Recorder("b")]).save(_log())
+    errors = LogRepository([_Recorder("a", seen), _Recorder("b", seen)]).save(_log())
 
     assert seen == [("a", "run-1"), ("b", "run-1")]
+    assert errors == []
+
+
+def test_repository_records_a_split_between_sinks_instead_of_raising():
+    # The JSONL-written-then-SQLite-failed case: the archive is now inconsistent,
+    # and that fact has to be recorded rather than discovered later. Raising here
+    # would also destroy a response the caller may already have paid for.
+    seen: list[tuple[str, str]] = []
+
+    errors = LogRepository([_Recorder("jsonl", seen), _BoomWriter("sqlite")]).save(
+        _log()
+    )
+
+    (error,) = errors
+    assert error.run_id == "run-1"
+    assert error.sink == "sqlite"
+    assert error.error_type == "OSError"
+    assert error.written_sinks == ["jsonl"]  # the log is split across stores
+
+
+def test_repository_attempts_every_sink_even_after_one_fails():
+    # One destination failing says nothing about the others, so the fan-out must
+    # not stop at the first error.
+    seen: list[tuple[str, str]] = []
+
+    errors = LogRepository([_BoomWriter("jsonl"), _Recorder("sqlite", seen)]).save(
+        _log()
+    )
+
+    assert seen == [("sqlite", "run-1")]  # the second writer still ran
+    assert [e.sink for e in errors] == ["jsonl"]
+    assert errors[0].written_sinks == ["sqlite"]
 
 
 def test_default_repository_writes_both_sinks(tmp_path, temp_db):

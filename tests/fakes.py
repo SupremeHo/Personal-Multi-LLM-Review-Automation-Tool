@@ -9,7 +9,13 @@ import types
 from pathlib import Path
 
 from resources.providers.response_error import PaidResponseError
-from resources.schemas import LLMCallResult, LLMRequest, TokenUsageInfo
+from resources.schemas import (
+    CostInfo,
+    LLMCallResult,
+    LLMRequest,
+    SalvageInfo,
+    TokenUsageInfo,
+)
 
 
 # --- price tables -----------------------------------------------------------
@@ -45,6 +51,17 @@ def write_price_table(
     return path
 
 
+def _recording(response, calls: list | None):
+    """Return a fake API callable that records the kwargs it was given."""
+
+    def call(**kwargs):
+        if calls is not None:
+            calls.append(kwargs)
+        return response
+
+    return call
+
+
 # --- OpenAI-shaped fakes ----------------------------------------------------
 def make_openai_response(model: str = "gpt-4o-mini", cached: int = 20):
     details = types.SimpleNamespace(cached_tokens=cached)
@@ -61,9 +78,10 @@ def make_openai_response(model: str = "gpt-4o-mini", cached: int = 20):
     )
 
 
-def fake_openai_client(response=None):
+def fake_openai_client(response=None, calls: list | None = None):
+    """Pass ``calls`` to capture the kwargs each request was sent with."""
     response = response or make_openai_response()
-    completions = types.SimpleNamespace(create=lambda **kwargs: response)
+    completions = types.SimpleNamespace(create=_recording(response, calls))
     chat = types.SimpleNamespace(completions=completions)
     return types.SimpleNamespace(chat=chat)
 
@@ -88,9 +106,10 @@ def make_anthropic_response(
     )
 
 
-def fake_anthropic_client(response=None):
+def fake_anthropic_client(response=None, calls: list | None = None):
+    """Pass ``calls`` to capture the kwargs each request was sent with."""
     response = response or make_anthropic_response()
-    messages = types.SimpleNamespace(create=lambda **kwargs: response)
+    messages = types.SimpleNamespace(create=_recording(response, calls))
     return types.SimpleNamespace(messages=messages)
 
 
@@ -112,20 +131,39 @@ def make_google_response(model: str = "gemini-test", cached: int = 15):
     )
 
 
-def fake_google_client(response=None):
+def fake_google_client(response=None, calls: list | None = None):
+    """Pass ``calls`` to capture the kwargs each request was sent with."""
     response = response or make_google_response()
-    models = types.SimpleNamespace(generate_content=lambda **kwargs: response)
+    models = types.SimpleNamespace(generate_content=_recording(response, calls))
     return types.SimpleNamespace(models=models)
 
 
 # --- fake ChatProviders (for registry/service tests) ------------------------
-def make_result(request: LLMRequest, provider: str = "fake", text: str = "ok"):
+def make_result(
+    request: LLMRequest,
+    provider: str = "fake",
+    text: str = "ok",
+    *,
+    costed: bool = True,
+):
+    """
+    Build a result for a fake provider.
+
+    Costed by default, so a batch of healthy fakes reports a clean audit status.
+    Pass costed=False for the billed-but-uncosted case (PaidResponseError).
+    """
+    cost = (
+        CostInfo(input_usd=0.0001, output_usd=0.0002, total_usd=0.0003, estimated=True)
+        if costed
+        else None
+    )
     return LLMCallResult(
         response_id=request.response_id,
         provider=provider,
         model=request.selected_model,
         response_text=text,
         usage=TokenUsageInfo(input_tokens=1, output_tokens=1, total_tokens=2),
+        cost=cost,
     )
 
 
@@ -143,12 +181,75 @@ class FailProvider:
         raise RuntimeError("boom")
 
 
+class EmptyAnswerProvider:
+    """A call that succeeds and bills, but returns nothing to compare."""
+
+    provider_name = "empty"
+
+    def ask(self, request: LLMRequest) -> LLMCallResult:
+        return make_result(request, "empty", text="   ")
+
+
 class PaidFailProvider:
+    """Billed, then cost calculation broke: the response itself is still intact."""
+
     provider_name = "paidfail"
 
     def ask(self, request: LLMRequest) -> LLMCallResult:
         raise PaidResponseError(
-            make_result(request, "paidfail"), ValueError("cost broke")
+            ValueError("cost broke"),
+            result=make_result(request, "paidfail", costed=False),
+            salvage=SalvageInfo(
+                failed_stage="cost",
+                provider="paidfail",
+                requested_model=request.selected_model,
+            ),
+        )
+
+
+class ParseFailProvider:
+    """Billed, then parsing broke: nothing but the salvage diagnostics survives."""
+
+    provider_name = "parsefail"
+
+    def ask(self, request: LLMRequest) -> LLMCallResult:
+        raise PaidResponseError(
+            AttributeError("response shape changed"),
+            salvage=SalvageInfo(
+                failed_stage="parse",
+                provider="parsefail",
+                requested_model=request.selected_model,
+                raw_response_id="raw-parsefail",
+                raw_usage={"input_tokens": 7},
+            ),
+        )
+
+
+class BadResultProvider:
+    """
+    Returns something that is not an LLMCallResult, breaking log assembly.
+
+    The ChatProvider contract is structural, so nothing stops a provider from
+    returning the wrong type; the failure only surfaces when the audit log is
+    built - after the call was already paid for.
+    """
+
+    provider_name = "badresult"
+
+    def ask(self, request: LLMRequest):
+        return "not a result object"
+
+
+class BadSalvageProvider:
+    """Billed response preserved, but the salvage attached to it is malformed."""
+
+    provider_name = "badsalvage"
+
+    def ask(self, request: LLMRequest) -> LLMCallResult:
+        raise PaidResponseError(
+            ValueError("cost broke"),
+            result=make_result(request, "badsalvage", costed=False),
+            salvage="not a salvage object",
         )
 
 
@@ -168,6 +269,29 @@ class BarrierProvider:
 
     def ask(self, request: LLMRequest) -> LLMCallResult:
         self._barrier.wait()
+        return make_result(request, self.provider_name)
+
+
+class ConcurrencyProbeProvider:
+    """Records how many calls were ever in flight at the same time."""
+
+    provider_name = "probe"
+
+    def __init__(self, delay: float = 0.05):
+        self._delay = delay
+        self._lock = threading.Lock()
+        self._in_flight = 0
+        self.peak = 0
+
+    def ask(self, request: LLMRequest) -> LLMCallResult:
+        with self._lock:
+            self._in_flight += 1
+            self.peak = max(self.peak, self._in_flight)
+        try:
+            time.sleep(self._delay)  # hold the slot so overlap is observable
+        finally:
+            with self._lock:
+                self._in_flight -= 1
         return make_result(request, self.provider_name)
 
 

@@ -10,6 +10,7 @@ from typing import Any
 import openai
 from openai import OpenAI
 
+from resources.call_policy import HTTP_TIMEOUT, MAX_RETRIES
 from resources.providers.runner import ParsedResponse, run_chat
 from resources.schemas import LLMCallResult, LLMRequest, TokenUsageInfo
 
@@ -17,9 +18,11 @@ PRICE_DIR = Path(__file__).resolve().parent.parent.parent / "config" / "prices"
 PRICE_PATH_OPENAI = PRICE_DIR / "prices_openai.json"
 
 # Constructed at import time; set to None if the key/init fails so a missing key
-# disables this provider instead of crashing the whole tool.
+# disables this provider instead of crashing the whole tool. Timeout and retry
+# budget are stated explicitly (see call_policy) rather than left to the SDK's
+# 10-minute default, which would hold a whole comparison hostage.
 try:
-    _default_client = OpenAI()
+    _default_client = OpenAI(timeout=HTTP_TIMEOUT, max_retries=MAX_RETRIES)
 except openai.OpenAIError:
     _default_client = None
 
@@ -49,8 +52,12 @@ class OpenAIProvider:
 
     def _call_api(self, request: LLMRequest) -> Any:
         # >>>>> Paid call. Money is spent here. <<<<<
+        # max_completion_tokens, not the deprecated max_tokens: newer models reject
+        # the old name outright. Without it the request's ceiling silently did not
+        # apply here, unlike Anthropic and Gemini.
         return self._client.chat.completions.create(
             model=request.selected_model,
+            max_completion_tokens=request.max_tokens,
             messages=[
                 {"role": "system", "content": request.system_prompt},
                 {"role": "user", "content": request.user_question},

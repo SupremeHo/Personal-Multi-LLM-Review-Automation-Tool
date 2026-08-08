@@ -4,7 +4,7 @@
 
 ## What this is
 
-A personal CLI tool that sends a prompt to LLM providers, then logs each response together with token usage, locally-computed cost, and audit metadata into JSONL files and a SQLite database. The end goal is *cross-validation* across multiple models (the "review" in the name): the `compare` command asks several providers the same question and shows every answer side by side. OpenAI and Anthropic providers are implemented; Google/Gemini is a stub. The philosophy is to surface blind spots/counterarguments, not to treat an AI majority vote as truth — the human always makes the final call.
+A personal CLI tool that sends a prompt to LLM providers, then logs each response together with token usage, locally-computed cost, and audit metadata into JSONL files and a SQLite database. The end goal is *cross-validation* across multiple models (the "review" in the name): the `compare` command asks several providers the same question and prints every answer in target order. OpenAI, Anthropic and Google/Gemini providers are all implemented. The philosophy is to surface blind spots/counterarguments, not to treat an AI majority vote as truth — the human always makes the final call.
 
 > **Project context, history & roadmap:** see [docs/PROJECT_NOTES.ko-KR.md](docs/PROJECT_NOTES.ko-KR.md) — the author's development journal (milestones with status, stage-by-stage progress, design decisions, and design questions). Consult it when you need the *why* behind a decision or the planned direction, not just the current code. Note some entries predate the layered refactor below; the code is the source of truth for current structure.
 
@@ -12,21 +12,11 @@ A personal CLI tool that sends a prompt to LLM providers, then logs each respons
 
 The code is a single layered architecture under `resources/`, used as a package with **package-absolute imports** (`from resources.schemas import ...`) and run from the **project root**. The earlier "flat modules vs. SOLID rewrite" split is gone (`llm_client.py` was removed; its logic now lives in the provider/service layers).
 
-```bash
-cli.py                              # thin Typer layer: parse args → delegate → render
-  └─ services/service_ask.py        # owns ids (run_id/group_id/response_id), builds logs, collects ErrorInfo, archives
-       ├─ providers/registry.py     # name → ChatProvider instance (the only place that knows concrete providers)
-       │    └─ providers/provider_{openai,anthropic,google}.py   # per-provider API specifics
-       │         └─ providers/runner.py     # run_chat(): the shared call pipeline, provider differences injected as callbacks
-       │              └─ count_cost.py / schemas.py
-       └─ log_repository.py         # LogRepository: fans one log out to every writer; reads back via SqliteLogReader
-            └─ storage_json.py / storage_sqlite.py
-```
-
 - **`providers/base_provider.py`** defines the `ChatProvider` Protocol (structural contract): `provider_name: str` + `ask(request: LLMRequest) -> LLMCallResult`. Concrete providers satisfy it by structure, not inheritance. (Design choice: Protocol over ABC; shared behavior is reused via `runner.run_chat`, not a base class.)
 - **`providers/runner.py`** holds the common chat pipeline once (preflight → paid call → parse → best-effort cost → assemble result → `PaidResponseError`). Each provider only supplies two callbacks: `_call_api` (the paid call) and `_parse_response` (raw response → `ParsedResponse`).
 - **`services/service_ask.py`** is the orchestration entry point: `ask()` (single) and `compare()` (multi). It mints `run_id`/`group_id`/`response_id`, resolves providers via the registry, turns every outcome into an `LLMCallLog`, collects failures as `ErrorInfo` (compare only), and archives via `persist_log()`.
-- **`log_repository.py`** is the persistence seam. `LogWriter` (Protocol) is one destination; `LogRepository.save()` fans a log out to all of them; `LogReader`/`SqliteLogReader` serves the `history` command. `default_repository()` wires the production set: `JsonlLogWriter` then `SqliteLogWriter`. The service knows only `save()`/`recent()` — never JSONL layout or SQLite connections.
+- **`log_repository.py`** is the persistence seam. `LogWriter` (Protocol) is one destination (identified by `sink_name`); `LogRepository.save()` fans a log out to all of them, attempting every one and returning the refusals as `PersistenceErrorInfo` instead of raising; `LogReader`/`SqliteLogReader` serves the `history` command. `default_repository()` wires the production set: `JsonlLogWriter` then `SqliteLogWriter`. The service knows only `save()`/`recent()` — never JSONL layout or SQLite connections.
+- **`call_policy.py`** holds the resource limits for the paid path in one place — parallel-call ceiling, connect/read timeouts, SDK retry budget — each with the reasoning next to the number. Providers build their SDK clients from it; `service_ask` sizes the thread pool from it and records it on every log.
 - Small shared helpers: **`diagnostics.py`** (`print_error`, the `[file][func] Error Message:` convention) and **`providers/response_error.py`** (`PaidResponseError`).
 
 When fixing behavior, touch the layer that owns it: the shared flow → `runner.py`; a provider's API quirks → that `provider_*.py`; orchestration → `service_ask.py`; where/how a log is stored → `log_repository.py`. Adding a provider = add a `provider_*.py` + one line in `registry.PROVIDERS`.
@@ -45,22 +35,11 @@ python -m resources.cli history -n 10                                           
 python -m resources.cli history -g <group_id>                                   # only the calls of one comparison batch
 ```
 
-`ask` and `compare` make real (paid) calls. `compare` requires at least one `--target/-t provider:model` and runs the targets in parallel under one shared `group_id` (each target keeps its own `run_id`), so wall time is the slowest call rather than their sum.
+`ask` and `compare` make real (paid) calls. `compare` requires at least one `--target/-t provider:model`, rejects a repeated `provider:model`, and runs the targets in parallel (capped at `call_policy.MAX_PARALLEL_CALLS`) under one shared `group_id` (each target keeps its own `run_id`), so wall time is the slowest call rather than their sum. It prints answers in target order with per-call and total cost, plus the three status axes.
 
 `history` is free — it only reads the local SQLite DB.
 
-Lint / format (config in `pyproject.toml`, target `py314`, line length 88):
-
-```bash
-ruff check .
-ruff format .
-```
-
-Environments & deps — development is consolidated on **Python 3.14** (standard build; free-threading and the JIT were evaluated and deliberately not used). Dependencies are pinned in a single `requirements.txt`, which includes the test-only `pytest`. Virtualenvs live in the working tree but are **gitignored** (`.venv*/`), so a fresh clone has none — older `.venv_py312`/`.venv_py313` directories may still exist locally and are leftovers:
-
-```bash
-pip install -r requirements.txt
-```
+Environments & deps — development is consolidated on **Python 3.14** (standard build; free-threading and the JIT were evaluated and deliberately not used). Dependencies are pinned in a single `requirements.txt`, which includes the test-only `pytest`. Virtualenvs live in the working tree but are **gitignored** (`.venv*/`), so a fresh clone has none — older `.venv_py312`/`.venv_py313` directories may still exist locally and are leftovers.
 
 Database — the SQLite file `_db/llm_responses.db` is created/seeded from `_db/_create_table.sql` (run it once with the `sqlite3` CLI or any client). `storage_sqlite.py` connects to an **existing** DB and only `ALTER`s in missing audit columns; it does not create the tables.
 
@@ -71,8 +50,6 @@ python -m pytest
 ```
 
 ## Data flow (the `ask` path)
-
-`cli.ask` → `service_ask.ask` (mints ids, builds `LLMRequest`) → `service_ask.run_request` → `registry.get_provider` → `provider.ask` → `runner.run_chat` → returns `LLMCallResult` (or raises `PaidResponseError`) → `run_request` wraps it in an `LLMCallLog` → `service_ask.persist_log` → `default_repository(...).save(log)` fans the log out to `JsonlLogWriter` (appends to `_logs/<Provider>/<prefix>_response_log_<timestamp>.jsonl`) and then `SqliteLogWriter` (upserts into `_db/llm_responses.db`).
 
 `compare` runs the provider-call half of this concurrently per target under one `group_id`, then walks the futures in target order to persist and to collect `ErrorInfo` for any failures.
 
@@ -85,13 +62,19 @@ Two things to know about this path:
 
 These conventions encode hard-won billing/safety decisions; don't undo them casually:
 
-- **Never discard a billed response.** In `runner.run_chat`, validation that can be done for free happens in `preflight_pricing` (price file exists + parses, model name is known) **before** the paid call. Anything that fails *after* billing — currently cost calculation — must not throw away the response: it is caught, wrapped in `PaidResponseError(result, original)`, and re-raised so the caller can still persist the paid result. `service_ask.run_request` catches `PaidResponseError` separately from generic `Exception` for exactly this reason, and `compare` preserves the salvaged result in `ErrorInfo.partial_result`.
+- **Never discard a billed response.** In `runner.run_chat`, validation that can be done for free happens in `preflight_pricing` (price file exists + parses, model name is known) **before** the paid call. **Every** step after the paid call sits inside one post-billing boundary — response parsing, cost calculation, and `LLMCallResult` validation are each caught, wrapped in `PaidResponseError`, and re-raised so the caller can still persist proof that money was spent. How much survives depends on where it broke: a cost failure still yields a full `result` (with `cost=None`), while a parse or validation failure has no result to carry and instead attaches `SalvageInfo` (`failed_stage`, provider, requested model, plus a best-effort `raw_response_id`/`raw_model`/`raw_usage` read generically off the raw response). Salvage extraction itself never raises — it degrades to the three fields always known — so it can't mask the real failure. The response *body* is deliberately not salvaged: its path is provider-specific and it can carry sensitive prompt content. `service_ask.run_request` catches `PaidResponseError` separately from generic `Exception` for exactly this reason and records both `result` and `salvage` on the log; `compare` carries them into `ErrorInfo.partial_result` / `ErrorInfo.salvage`.
 
-- **The audit log is always written.** `service_ask.run_request` builds a single `log_data` dict up front (success/error/result all defaulted), mutates it in the try/except/finally, and returns an `LLMCallLog` no matter what — including on failure, with `elapsed_sec` recorded either way. `persist_log` then writes it, so failed runs still produce a `runs` row.
+- **The audit log is always written.** `service_ask.run_request` builds a single `log_data` dict up front (success/error/result all defaulted), mutates it in the try/except/finally, and returns an `LLMCallLog` no matter what — including on failure, with `elapsed_sec` recorded either way. `persist_log` then writes it, so failed runs still produce a `runs` row. The final assembly goes through `_assemble_log`, which **never raises**: `LLMCallLog` forbids extras, so building the log is itself a failure point (1.5단계 lost a whole run to exactly that), and a `ValidationError` escaping a worker would abandon the other targets' billed results. Its fallback drops only `result`/`salvage` — the two fields a provider supplies — and only when they are not the validated objects they claim to be, so a genuinely billed result survives a degraded log.
+
+- **A comparison's state has three axes, not one.** `CompareResult` reports `collection_status` (complete/partial/**insufficient**), `audit_status` (clean/degraded), and `persistence_status` (complete/partial/failed, or `None` when persistence was never attempted). One label cannot carry them: a batch can have every answer it needs while its cost record is incomplete and its archive half-written. The load-bearing concept is **`usable_responses`, which is not `successes`** — a `PaidResponseError` partial (body intact, only the price tag missing) *is* usable, while a response with no readable body or an empty one is *not*, however the call was judged. Quorum is `len(usable_responses) >= QUORUM` (2): a lone success is `insufficient`, not a weak comparison. `audit_status` is about the money ledger only — never read `degraded` as a statement about answer quality.
+
+- **Archiving is a side effect, never a gate.** Storing a log must not be able to destroy the result it describes, so `LogRepository.save()` attempts every writer independently and returns `PersistenceErrorInfo` values rather than raising — each one carrying `written_sinks`, so the JSONL-written-then-SQLite-failed split is recorded instead of silently diverging. `persist_log` prints each fault as it happens and returns them; `compare` collects them into `CompareResult.persist_errors` (kept apart from `failures`: a locked database is not a failed call) and the CLI warns about them after the answers. In the compare loop this is why results are appended to the outcome **before** persistence is attempted.
 
 - **Provider contract is simple; failures-as-data live in the service layer.** A provider returns `LLMCallResult` on success and *raises* on failure (`PaidResponseError` for a billed partial). Providers never return errors as values. Turning a failure into a value (`ErrorInfo`) happens only in `service_ask.compare`, so one provider failing never stops the others.
 
-- **`compare` parallelizes the calls only; persistence stays single-threaded.** The targets' API calls run in a `ThreadPoolExecutor` (`max_workers=len(targets)`), which is safe because `run_request` is a self-contained unit that never raises and the registry's provider instances are read-only after construction. But the futures are consumed in **submission order, not completion order**, so `persist_log` only ever runs on the calling thread. Two things depend on that: same-provider targets share one JSONL file (the filename is keyed on the batch-wide `created_at`), and `SqliteLogReader.recent` orders by insertion `id` to keep a group's rows deterministic — concurrent writers would corrupt the first and randomize the second. Do **not** add a `future.result(timeout=...)`: a blocking socket read cannot be cancelled, so a timeout would abandon an already-billed call and break the first invariant above.
+- **Resource limits are stated, not inherited.** `call_policy.py` is the single home for them, and the values are chosen against the billing invariant rather than for latency: `CONNECT_TIMEOUT_SEC` is short because nothing is billed yet, `READ_TIMEOUT_SEC` is long because by then the provider is generating and a timeout would throw away a paid response. `MAX_RETRIES` is the SDKs' own default written down — the point is that the retry budget lives in exactly one place, so **never add an application-level retry on top** (it would silently double the budget), and nothing after billing is ever retried. `MAX_PARALLEL_CALLS` caps the pool because `--target` is unbounded. `compare` also **rejects duplicate `provider:model` targets** before any paid call: the same model twice is a second bill and a second correlated vote in the quorum, not cross-validation. Every log carries a `CallPolicyInfo` snapshot so an old failure stays interpretable; note this records the *budget*, not the spend — the SDKs do not report how many attempts a call actually took.
+
+- **`compare` parallelizes the calls only; persistence stays single-threaded.** The targets' API calls run in a `ThreadPoolExecutor` (`max_workers=min(len(targets), MAX_PARALLEL_CALLS)`), which is safe because `run_request` is a self-contained unit that never raises and the registry's provider instances are read-only after construction — one shared instance per provider, which is why `ChatProvider.ask()` is contractually required to be thread-safe. That contract is belt-and-braces: each `future.result()` is also guarded, so a worker that somehow dies degrades to one failed log instead of stopping the loop and discarding every target not yet read. But the futures are consumed in **submission order, not completion order**, so `persist_log` only ever runs on the calling thread. Two things depend on that: same-provider targets share one JSONL file (the filename is keyed on the batch-wide `created_at`), and `SqliteLogReader.recent` orders by insertion `id` to keep a group's rows deterministic — concurrent writers would corrupt the first and randomize the second. Do **not** add a `future.result(timeout=...)`: a blocking socket read cannot be cancelled, so a timeout would abandon an already-billed call and break the first invariant above.
 
 - **Money/precision uses `Decimal`.** `count_cost.py` computes per-token cost in `Decimal` (per-1M-token rates) and only converts to `float` at the dict boundary. `cost.estimated` is always `True` to distinguish local estimates from real billing. The cost dict keys are kept 1:1 with `CostInfo` fields so `runner` builds it via `CostInfo(**cost)`.
 
@@ -109,12 +92,3 @@ These conventions encode hard-won billing/safety decisions; don't undo them casu
 ## Environment
 
 Each `provider_*.py` constructs its SDK client at import time (`OpenAI()`, `Anthropic()`) and sets `_default_client` to `None` if the key/init fails, rather than crashing — so a missing key disables one provider instead of the whole tool. `env_check.py` mirrors this: missing keys are **warnings**, not fatal. Keys come from `.env` (see `.env.example`): `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`.
-
-## Code Review
-
-Python code reviews should be based on readability, Pythonic grammar, performance, and testability. We recommend automating the most common PEP 8 Style Guide and adapting industry standards such as the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html) to meet team standards.
-
-- **Security**: SQL injection, XSS, Authentication bypass check
-- **Performance**: N+1 queries, checking unnecessary repeat statements
-- **Convention/Style**: Naming rules, Compliance with import order
-- **Test**: Check if the new feature includes a test

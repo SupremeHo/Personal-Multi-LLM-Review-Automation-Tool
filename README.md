@@ -114,7 +114,7 @@ python -m resources.cli ask "<system_prompt>" "<user_question>" \
   --provider anthropic --model claude-haiku-4-5
 ```
 
-**Compare several models side by side** (the core "review" feature)—requires at least one `--target/-t provider:model`. Each call gets its own `run_id`, all tied together by one shared `group_id`:
+**Compare several models** (the core "review" feature)—requires at least one `--target/-t provider:model`, and the same `provider:model` may not be repeated. Answers print in the order you listed the targets. Each call gets its own `run_id`, all tied together by one shared `group_id`:
 
 ```bash
 python -m resources.cli compare "<system_prompt>" "<user_question>" \

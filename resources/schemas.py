@@ -2,8 +2,28 @@
 # The structure containing the LLM response content and metadata such as tokens used, model name, and finish_reason.
 
 from datetime import datetime
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
+
+CollectionStatus = Literal["complete", "partial", "insufficient"]
+"""
+How much of a comparison actually came back, measured in *usable answers*.
+
+`insufficient` (not "failed") because the calls may all have succeeded and the
+batch still not be a comparison - one answer has nothing to be compared against.
+"""
+
+AuditStatus = Literal["clean", "degraded"]
+"""
+Whether the money ledger for a batch is complete.
+
+`degraded` means something was billed but not fully accounted for. It says nothing
+about answer quality, and must never be read as one.
+"""
+
+PersistenceStatus = Literal["complete", "partial", "failed"]
+"""Whether the audit trail for a batch reached storage. Independent of the two above."""
 
 
 class TokenUsageInfo(BaseModel):
@@ -151,6 +171,83 @@ class LLMCallResult(BaseModel):
     """Cost information calculated based on token usage."""
 
 
+class SalvageInfo(BaseModel):
+    """
+    What could be rescued from a response that was billed but never became a result.
+
+    A post-billing failure other than cost calculation (a parse error, an
+    unexpected response shape) leaves no LLMCallResult to preserve, so the run
+    would otherwise be logged as a plain failure - indistinguishable from a call
+    that never reached the API. This model keeps the fact that money was spent,
+    where the pipeline broke, and enough provider-side identity to look the call
+    up or reconcile its cost by hand.
+
+    The presence of this object on a log IS the "a response was received" flag.
+
+    The response *body* is deliberately not captured: its location differs per
+    provider, and it can carry sensitive prompt content. Only the fields shared
+    by the OpenAI-compatible response shapes are read, on a best-effort basis -
+    every field below except the first three may be missing.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    failed_stage: Literal["parse", "cost", "result_validation"]
+    """Which post-billing step failed: response parsing, cost calculation, or result validation."""
+
+    provider: str
+    """Canonical provider key of the billed call."""
+
+    requested_model: str
+    """Model name that was requested (the response's own model may differ or be unreadable)."""
+
+    raw_type: str | None = None
+    """Class name of the raw response object, for diagnosing a changed SDK shape."""
+
+    raw_response_id: str | None = None
+    """Provider-side response id, so the billed call stays traceable on their dashboard."""
+
+    raw_model: str | None = None
+    """Model name as reported by the response itself, when readable."""
+
+    raw_usage: dict[str, Any] | None = None
+    """
+    Scalar token-usage fields read straight off the raw response.
+
+    Kept as a loose dict on purpose: normalizing it into TokenUsageInfo is
+    exactly the step that just failed. Non-scalar entries are dropped so the
+    audit log always stays JSON-serializable.
+    """
+
+
+class CallPolicyInfo(BaseModel):
+    """
+    The timeout and retry budget a call was made under.
+
+    Recorded so a failure stays interpretable later: "timed out" means something
+    different under a 10-second budget than under a 300-second one, and the numbers
+    in call_policy.py will change over time while old logs must still be readable.
+
+    This is the *configured* policy for the process (see `resources/call_policy.py`),
+    not a measurement - the SDKs do not report how many attempts a call actually
+    took, and a provider constructed with a custom client may not follow it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_parallel_calls: int
+    """Ceiling on simultaneous provider calls in one `compare`."""
+
+    connect_timeout_sec: float
+    """Handshake budget; expiring here means nothing was billed."""
+
+    read_timeout_sec: float
+    """Response-body budget; expiring here can mean a billed response was lost."""
+
+    max_retries: int
+    """Retries the SDK may make after the first attempt. Never applied post-billing."""
+
+
 class LLMCallLog(BaseModel):
     """
     Define a Pydantic model to represent the log of an LLM's call.
@@ -171,6 +268,15 @@ class LLMCallLog(BaseModel):
         None  # Which provider was attempted (kept even when the call fails and result is None).
     )
     """Canonical provider key of the model that generated the response."""
+
+    model: str | None = None
+    """
+    Model that was *requested*.
+
+    Kept next to `provider` so a failed run still records what was attempted - the
+    result (which carries the model the provider actually answered with) is None
+    on failure, and without this a failed audit row cannot say which model it was.
+    """
 
     system_prompt: str
     """System prompt used for the LLM call."""
@@ -196,6 +302,17 @@ class LLMCallLog(BaseModel):
 
     result: LLMCallResult | None = None
     """The result of the LLM call, if successful."""
+
+    salvage: SalvageInfo | None = None
+    """
+    Diagnostics for a billed response that never became a result.
+
+    Set only when the paid call went through but a later step failed without
+    leaving an LLMCallResult, so a failed run still records that money was spent.
+    """
+
+    policy: CallPolicyInfo | None = None
+    """Timeout/retry budget in effect for this call; None on logs written before it existed."""
 
 
 class ErrorInfo(BaseModel):
@@ -240,5 +357,50 @@ class ErrorInfo(BaseModel):
     already paid for is never discarded during aggregation.
     """
 
+    salvage: SalvageInfo | None = None
+    """
+    Diagnostics for a billed response too broken to yield a partial_result.
+
+    Mirrors LLMCallLog.salvage so aggregation does not drop what the paid call
+    left behind when even parsing failed.
+    """
+
     created_at: datetime
     """When the failure was recorded."""
+
+
+class PersistenceErrorInfo(BaseModel):
+    """
+    One storage destination refusing an audit log, represented as data.
+
+    Archiving is a *side effect* of a call that may already have been billed, so a
+    full disk or a locked database must never take down the result held in memory.
+    The write layer therefore reports what it could not store instead of raising,
+    and every sink is attempted independently - one entry per sink that failed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+    """The audit log that could not be stored."""
+
+    sink: str
+    """Destination that refused it ("jsonl", "sqlite")."""
+
+    error_type: str
+    """Exception class name, kept queryable without parsing the message."""
+
+    message: str
+    """Human-readable failure description (str of the underlying exception)."""
+
+    written_sinks: list[str] = []
+    """
+    Destinations that DID accept this log.
+
+    Non-empty next to a failure means the log is now split across stores - the
+    JSONL-succeeded-then-SQLite-failed case - so the inconsistency is recorded
+    rather than left to be discovered later.
+    """
+
+    created_at: datetime
+    """When the storage failure was recorded."""

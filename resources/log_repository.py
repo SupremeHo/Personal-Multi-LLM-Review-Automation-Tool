@@ -19,10 +19,11 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
-from resources.schemas import LLMCallLog
+from resources.schemas import LLMCallLog, PersistenceErrorInfo
 from resources.storage_json import append_jsonl
 from resources.storage_sqlite import ensure_audit_columns, insert_log_record
 
@@ -41,8 +42,12 @@ class LogWriter(Protocol):
     Structural contract for one persistence destination.
 
     A writer takes a fully-formed audit log and stores it somewhere. It never
-    returns a value; failures propagate as exceptions to the caller.
+    returns a value; failures propagate as exceptions to the repository, which is
+    where they become data.
     """
+
+    sink_name: str
+    """Short id of this destination ("jsonl", "sqlite"), used to report failures."""
 
     def write(self, log: LLMCallLog) -> None: ...
 
@@ -62,6 +67,8 @@ class LogReader(Protocol):
 
 class JsonlLogWriter:
     """Append each log to a per-provider JSONL file under ``<base_dir>/_logs/``."""
+
+    sink_name = "jsonl"
 
     def __init__(self, base_dir: Path):
         self._base_dir = base_dir
@@ -87,6 +94,8 @@ class SqliteLogWriter:
     shape is identical to what load_jsonl_file() used to hand insert_log_record,
     so the mapping logic is untouched.
     """
+
+    sink_name = "sqlite"
 
     def __init__(self, db_path: str | Path):
         self._db_path = str(db_path)
@@ -146,9 +155,44 @@ class LogRepository:
         self._writers = writers
         self._reader = reader
 
-    def save(self, log: LLMCallLog) -> None:
+    def save(self, log: LLMCallLog) -> list[PersistenceErrorInfo]:
+        """
+        Write the log to every destination and report the ones that refused it.
+
+        Two rules, both there because archiving is a side effect of a call that may
+        already have been billed:
+
+        * No writer may abort the fan-out. One sink failing says nothing about the
+          others, so every one of them is still attempted.
+        * A storage fault never raises past the caller's in-memory result. Losing a
+          paid response because a disk was full would trade the expensive artifact
+          for the cheap one, so failures come back as data instead.
+
+        Each failure carries the sinks that DID accept the log, so the
+        JSONL-written-then-SQLite-failed split is recorded as such.
+        """
+        written: list[str] = []
+        failures: list[tuple[str, Exception]] = []
+
         for writer in self._writers:
-            writer.write(log)
+            try:
+                writer.write(log)
+            except Exception as e:  # noqa: BLE001 - a storage fault is data, not a stop signal.
+                failures.append((writer.sink_name, e))
+            else:
+                written.append(writer.sink_name)
+
+        return [
+            PersistenceErrorInfo(
+                run_id=log.run_id,
+                sink=sink,
+                error_type=type(error).__name__,
+                message=str(error),
+                written_sinks=written,
+                created_at=datetime.now(UTC),
+            )
+            for sink, error in failures
+        ]
 
     def recent(self, limit: int = 10, group_id: str | None = None) -> list[LLMCallLog]:
         if self._reader is None:
