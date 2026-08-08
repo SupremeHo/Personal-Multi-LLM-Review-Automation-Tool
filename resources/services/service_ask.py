@@ -369,9 +369,6 @@ def compare(
     The targets' API calls run in parallel (they are pure I/O waits), but only the
     calls: persistence stays on this thread - see the loop comment below.
 
-    The targets' API calls run in parallel (they are pure I/O waits), but only the
-    calls: persistence stays on this thread - see the loop comment below.
-
     Args:
       targets: list of (provider_name, selected_model) pairs. Must be distinct.
 
