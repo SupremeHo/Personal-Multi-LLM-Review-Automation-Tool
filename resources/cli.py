@@ -19,13 +19,19 @@ def _price(log) -> str:
         return "not billed" if log.salvage is None else "billed, unpriced"
     if log.result.cost is None:
         return "billed, unpriced"
-    return f"${log.result.cost.total_usd:.6f}"
+    return typer.style(
+        f"${log.result.cost.total_usd:.6f}",
+        fg=typer.colors.YELLOW,
+    )
 
 
 def _render_log(log) -> None:
     """Print a single call's outcome (success, salvaged partial, or failure)."""
+    provider = typer.style(log.provider, fg=typer.colors.BRIGHT_BLUE)
+    model = typer.style(log.model, fg=typer.colors.MAGENTA)
+
     if log.success and log.result is not None:
-        typer.echo(f"\n==== {log.provider} response  [{_price(log)}] ====\n")
+        typer.echo(f"\n==== {provider} / {model}'s response  [{_price(log)}] ====\n")
         typer.echo(f"{log.result.response_text}\n")
     elif log.result is not None:
         # Billed but a later step failed; the paid response was preserved.
@@ -197,7 +203,7 @@ def list_models():
     )
 
 
-def _snippet(text: str | None, width: int = 80) -> str:
+def _snippet(text: str | None, width: int = 120) -> str:
     """Collapse whitespace and truncate to a single short line for listing."""
     if not text:
         return ""
@@ -209,7 +215,13 @@ def _render_history_entry(log) -> None:
     """Print one past call as a compact, newest-first history line."""
     # Logs are stamped in UTC; show them in local time. astimezone() also does the
     # right thing for older naive rows, which were written in local time already.
-    ts = log.created_at.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+    ts = typer.style(
+        log.created_at.astimezone().strftime("%Y-%m-%d %H:%M:%S"),
+        fg=typer.colors.YELLOW,
+    )
+
+    providers = typer.style(log.provider, fg=typer.colors.BRIGHT_BLUE)
+    models = typer.style(log.result.model, fg=typer.colors.MAGENTA)
 
     ok = typer.style("OK", fg=typer.colors.GREEN, bold=True)
     fail = typer.style("FAILED", fg=typer.colors.RED, bold=True)
@@ -218,7 +230,7 @@ def _render_history_entry(log) -> None:
     e = typer.style(">> Error", fg=typer.colors.RED, bold=True)
 
     if log.success and log.result is not None:
-        typer.echo(f"\n[{ts}] {log.provider}/{log.result.model}  {ok}  {_price(log)}")
+        typer.echo(f"\n[{ts}] {providers}/{models}  {ok}  {_price(log)}")
         typer.echo(f"{q}: {_snippet(log.user_prompt)}")
         typer.echo(f"{a}: {_snippet(log.result.response_text)}")
     else:
@@ -243,16 +255,22 @@ def history(
     """
     logs = service_ask.read_history(limit, group)
     if not logs:
-        typer.echo("\n>>> [cli.py] No history yet.")
+        typer.secho(
+            "\n>>> [cli.py] No history yet.",
+            fg=typer.colors.RED,
+        )
         raise typer.Exit()
 
     header = (
-        f"History (latest {len(logs)})"
+        f"History (latest {len(logs)} calls)"
         if group is None
         else f"History for group {group}"
     )
 
-    typer.secho(f"\n==== {header} ====", fg=typer.colors.BRIGHT_CYAN, bold=True)
+    typer.secho(
+        f"\n==== {header} ====",
+        fg=typer.colors.BRIGHT_CYAN,
+    )
 
     for log in logs:
         _render_history_entry(log)

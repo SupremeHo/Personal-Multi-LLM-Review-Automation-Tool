@@ -31,8 +31,8 @@ def _list_models(
     """
 
     if client is None:
-        print(
-            f"Error Message: {label} client is unavailable. Check that the API key is set."
+        console.print(
+            f"[bold red]Error Message[/]: {label} client is unavailable. Check that the API key is set."
         )
         return
 
