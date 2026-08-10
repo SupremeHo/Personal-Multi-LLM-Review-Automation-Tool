@@ -220,8 +220,14 @@ def _render_history_entry(log) -> None:
         fg=typer.colors.YELLOW,
     )
 
-    providers = typer.style(log.provider, fg=typer.colors.BRIGHT_BLUE)
-    models = typer.style(log.result.model, fg=typer.colors.MAGENTA)
+    styled_providers_name = typer.style(
+        log.provider,
+        fg=typer.colors.BRIGHT_BLUE,
+    )
+    styled_models_name = typer.style(
+        log.model or (log.result.model if log.result else None) or "?",
+        fg=typer.colors.MAGENTA,
+    )
 
     ok = typer.style("OK", fg=typer.colors.GREEN, bold=True)
     fail = typer.style("FAILED", fg=typer.colors.RED, bold=True)
@@ -230,13 +236,16 @@ def _render_history_entry(log) -> None:
     e = typer.style(">> Error", fg=typer.colors.RED, bold=True)
 
     if log.success and log.result is not None:
-        typer.echo(f"\n[{ts}] {providers}/{models}  {ok}  {_price(log)}")
+        typer.echo(
+            f"\n[{ts}] {styled_providers_name}/{styled_models_name}  {ok}  {_price(log)}"
+        )
         typer.echo(f"{q}: {_snippet(log.user_prompt)}")
         typer.echo(f"{a}: {_snippet(log.result.response_text)}")
     else:
         # log.model (the requested one) is the only model a failed run knows.
-        model = log.model or (log.result.model if log.result else None) or "?"
-        typer.echo(f"\n[{ts}] {log.provider}/{model}  {fail}  {_price(log)}")
+        typer.echo(
+            f"\n[{ts}] {styled_providers_name}/{styled_providers_name}  {fail}  {_price(log)}"
+        )
         typer.echo(f"{q}: {_snippet(log.user_prompt)}")
         typer.echo(f"{e}: {_snippet(log.error_type)}")
 
