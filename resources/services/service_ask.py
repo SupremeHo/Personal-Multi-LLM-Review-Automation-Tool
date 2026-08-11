@@ -336,7 +336,7 @@ class CompareResult:
         "complete" for an archive nobody wrote would be the kind of quiet false
         claim this three-axis split exists to remove.
         """
-        if not self.persist_attempted:
+        if not self.persist_attempted or not self.logs:
             return None
         if not self.persist_errors:
             return "complete"
