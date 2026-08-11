@@ -13,8 +13,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from resources.env import load_env
-from resources.env_check import check_environment_variables
+from resources.env_check import (
+    check_environment_variables,
+    missing_environment_variables,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 API_KEYS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY")
@@ -100,6 +105,26 @@ def test_env_is_loaded_before_any_provider_module_is_imported():
     assert completed.stdout.strip() == "ok"
 
 
+def test_missing_environment_variables_reads_os_environ(monkeypatch):
+    """The check itself, without the interactive prompt wrapped around it."""
+    _clear_api_keys(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-anthropic")
+
+    missing = missing_environment_variables()
+
+    assert missing["OpenAI"] == ["OPENAI_API_KEY"]
+    assert missing["Anthropic"] == []
+    assert missing["Google"] == ["GEMINI_API_KEY"]
+
+
+def test_missing_environment_variables_treats_a_blank_value_as_missing(monkeypatch):
+    """A .env copied from .env.example supplies "" rather than nothing at all."""
+    _clear_api_keys(monkeypatch)
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+
+    assert missing_environment_variables()["OpenAI"] == ["OPENAI_API_KEY"]
+
+
 def test_check_env_reports_only_the_missing_keys(monkeypatch, capsys):
     """check-env reads os.environ, which is now the same view the providers got."""
     _clear_api_keys(monkeypatch)
@@ -113,3 +138,41 @@ def test_check_env_reports_only_the_missing_keys(monkeypatch, capsys):
     assert "OPENAI_API_KEY" in captured.err
     assert "ANTHROPIC_API_KEY" not in captured.err
     assert "GEMINI_API_KEY" not in captured.err
+
+
+def test_check_env_points_at_both_key_sources(monkeypatch, capsys):
+    # The advice used to name .env alone, which is the source that does NOT
+    # decide this: an OS variable overrides it, and the README recommends it.
+    _clear_api_keys(monkeypatch)
+    monkeypatch.setattr("builtins.input", lambda _prompt: "n")
+
+    check_environment_variables()
+
+    err = capsys.readouterr().err
+    assert "OS environment variable" in err
+    assert ".env" in err
+
+
+def test_check_env_exits_cleanly_on_interrupt(monkeypatch):
+    # Ctrl+C at the prompt used to end the command on a traceback, unlike the
+    # same prompt in list_models.py.
+    _clear_api_keys(monkeypatch)
+
+    def interrupt(_prompt):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("builtins.input", interrupt)
+
+    with pytest.raises(SystemExit) as excinfo:
+        check_environment_variables()
+
+    assert "interrupted by user" in str(excinfo.value)
+
+
+def test_check_env_never_fails_the_command_when_keys_are_missing(monkeypatch):
+    # Missing keys are warnings by design: a missing key disables one provider,
+    # not the tool, so a single-provider setup must not read as a failed command.
+    _clear_api_keys(monkeypatch)
+    monkeypatch.setattr("builtins.input", lambda _prompt: "n")
+
+    assert check_environment_variables() is None  # no SystemExit, no raise
