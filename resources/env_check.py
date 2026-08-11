@@ -49,16 +49,16 @@ def check_environment_variables():
     if not any(missing_by_provider.values()):
         print("All environment variables are set.\n")
 
-    # 5) Optionally, show the first 12 characters of APIs' required environment variables for verification (avoid printing the entire key for security reasons).
+    # 5) Optionally, show the last 4 characters of APIs' required environment variables for verification (avoid printing the entire key for security reasons).
     while True:
         try:
             check_values = input(
-                "Would you want to check the API values of the environment variables?\nIf yes, print the first 12 characters of the API key for verification (avoid printing the entire key for security reasons) (y/n): "
+                "Would you want to check the API values of the environment variables?\nIf yes, print the last 4 characters of the API key for verification (avoid printing the entire key for security reasons) (y/n): "
             ).lower()
 
             if check_values == "y":
                 for keys in REQUIRED_VARS.values():
-                    show_key_values_12_chars(keys)
+                    show_key_values_4_chars(keys)
                 break
             elif check_values == "n":
                 print("\nSkipping validation for environment variables...\n")
@@ -70,11 +70,11 @@ def check_environment_variables():
             sys.exit("Error Message: Read beyond end of file. Exit the program.")
 
 
-def show_key_values_12_chars(required_vars):
+def show_key_values_4_chars(required_vars):
     """
-    Show the first 12 characters of each required environment variable.
+    Show the last 4 characters of each required environment variable.
     """
     for env_var in required_vars:
         key_value = os.getenv(env_var)
-        key_value_12_chars = key_value[:12] if key_value else "(not set)"
-        print(f"\n{env_var}: {key_value_12_chars}")
+        key_value_4_chars = key_value[-4:] if key_value else "(not set)"
+        print(f"\n{env_var}: ...{key_value_4_chars}")
