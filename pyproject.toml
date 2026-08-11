@@ -1,6 +1,6 @@
 [project]
 name = "Personal Multi-LLM Review Automation Tool"
-version = "0.1.8"
+version = "0.1.925"
 description = "A multi-LLM platform that automates cross-validation of answers from multiple LLMs."
 readme = "README.md"
 license = "Apache-2.0"
