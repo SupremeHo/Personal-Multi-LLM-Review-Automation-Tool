@@ -5,7 +5,10 @@ from __future__ import annotations
 import pytest
 
 from resources.providers.base_provider import ChatProvider
-from resources.providers.provider_anthropic import AnthropicProvider
+from resources.providers.provider_anthropic import (
+    AnthropicProvider,
+    _build_default_client,
+)
 from resources.providers.provider_google import GoogleProvider
 from resources.providers.provider_openai import OpenAIProvider
 from resources.schemas import LLMRequest
@@ -62,6 +65,41 @@ def test_providers_satisfy_contract():
     assert isinstance(OpenAIProvider(client=object()), ChatProvider)
     assert isinstance(AnthropicProvider(client=object()), ChatProvider)
     assert isinstance(GoogleProvider(client=object()), ChatProvider)
+
+
+def _no_anthropic_credentials(monkeypatch):
+    for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_anthropic_client_is_none_without_credentials(monkeypatch):
+    # Regression: Anthropic() does not raise on a missing key the way OpenAI()
+    # and genai.Client() do - it hands back a keyless client. `except
+    # AnthropicError` alone therefore left _default_client non-None, so a missing
+    # key skipped runner's pre-billing guard and surfaced as a 401 instead.
+    _no_anthropic_credentials(monkeypatch)
+    assert _build_default_client() is None
+
+
+def test_anthropic_client_is_none_for_a_blank_key(monkeypatch):
+    # A .env copied from .env.example supplies "" rather than nothing at all.
+    _no_anthropic_credentials(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    assert _build_default_client() is None
+
+
+def test_anthropic_client_is_built_when_a_key_is_present(monkeypatch):
+    _no_anthropic_credentials(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-not-a-real-key")
+    assert _build_default_client() is not None
+
+
+def test_anthropic_client_accepts_an_auth_token(monkeypatch):
+    # The SDK resolves ANTHROPIC_AUTH_TOKEN too, which is why the check asks the
+    # client what it resolved rather than reading one variable name here.
+    _no_anthropic_credentials(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "not-a-real-token")
+    assert _build_default_client() is not None
 
 
 def test_openai_provider_maps_response(tmp_path):
