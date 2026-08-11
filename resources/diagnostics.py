@@ -11,13 +11,25 @@ from rich.text import Text
 console = Console()
 
 
-def print_error(message: str, *, module: str, func: str | None = None) -> None:
+def print_error(message: str, *, module: str, func: str | None = None) -> str:
     """
-    Print one standardized error line.
+    Print one standardized error line and return the message unchanged.
 
     Format: [module] [def func] Error Message: 'message_about_error'
 
     (the "[def func]" part is omitted when func is None).
+
+    The message comes back so a caller can report and raise in one step -
+    `raise RuntimeError(print_error(...))`. Two call sites (runner.run_chat's
+    unavailable-client guard, registry.get_provider) were already written that
+    way while this returned None, so they raised an exception whose only
+    argument was None: the reason reached the console but the audit log stored
+    the string "None" where it belonged, breaking a failed run's only record of
+    why it failed.
+
+    The location prefix is deliberately not part of the return value. It is a
+    console convention, and LLMCallLog already keeps the provider and the error
+    type in their own fields.
     """
     location = f">> [{module}] [def {func}]" if func else f">> [{module}]"
 
@@ -27,6 +39,7 @@ def print_error(message: str, *, module: str, func: str | None = None) -> None:
     text = Text.assemble(location_text, " Error Message: ", message_text)
 
     console.print(text)
+    return message
 
 
 def test_print_warning():

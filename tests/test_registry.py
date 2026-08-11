@@ -22,5 +22,11 @@ def test_providers_are_shared_instances():
 
 
 def test_unknown_provider_raises_keyerror():
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError) as excinfo:
         registry.get_provider("does-not-exist")
+
+    # Raised as KeyError(print_error(...)), so the name and the list of known
+    # providers only reach the caller if print_error returns the message.
+    raised = str(excinfo.value)
+    assert "does-not-exist" in raised
+    assert "openai" in raised

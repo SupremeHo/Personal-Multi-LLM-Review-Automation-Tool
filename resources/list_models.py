@@ -46,8 +46,14 @@ def _list_models(
         console.print(f"\n======== Finished listing {label}'s Models ========\n")
 
     except error_type as e:
-        console.print(f"Error Message: Failed to list {label}'s models: {e}")
-        raise
+        # Report and return, never re-raise: answering 'Yes' lists all three, and
+        # aborting here abandoned the providers not yet reached over one bad key.
+        # Nothing is billed by this command, so there is no result to protect by
+        # stopping - the same reasoning that makes compare() turn a provider
+        # failure into data instead of letting it end the batch.
+        console.print(
+            f"[bold red]Error Message[/]: Failed to list {label}'s models: {e}"
+        )
 
 
 def list_available_models(

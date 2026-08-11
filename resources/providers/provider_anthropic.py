@@ -17,14 +17,38 @@ from resources.schemas import LLMCallResult, LLMRequest, TokenUsageInfo
 PRICE_DIR = Path(__file__).resolve().parent.parent.parent / "config" / "prices"
 PRICE_PATH_ANTHROPIC = PRICE_DIR / "prices_claude.json"
 
-# Constructed at import time; set to None if the key/init fails so a missing key
-# disables this provider instead of crashing the whole tool. Timeout and retry
-# budget are stated explicitly (see call_policy) rather than left to the SDK's
-# 10-minute default, which would hold a whole comparison hostage.
-try:
-    _default_client = Anthropic(timeout=HTTP_TIMEOUT, max_retries=MAX_RETRIES)
-except anthropic.AnthropicError:
-    _default_client = None
+
+def _build_default_client() -> Anthropic | None:
+    """
+    The import-time client, or None when this provider has no credentials.
+
+    Timeout and retry budget are stated explicitly (see call_policy) rather than
+    left to the SDK's 10-minute default, which would hold a whole comparison
+    hostage.
+
+    The credential check is Anthropic-specific. OpenAI() and genai.Client()
+    raise when their key is missing, so `except` alone is enough there; Anthropic()
+    returns a keyless client that sends no auth header and only fails at call
+    time with a 401. That slipped past runner.run_chat's pre-billing "client is
+    unavailable" guard and turned `list-models` into a traceback, while the other
+    two printed a friendly message - so a missing key disabled two providers out
+    of three, not all three as documented.
+
+    Ask the client what it resolved instead of reading the environment here: the
+    SDK honours ANTHROPIC_API_KEY *and* ANTHROPIC_AUTH_TOKEN, and duplicating
+    that list is how the two drift apart.
+    """
+    try:
+        client = Anthropic(timeout=HTTP_TIMEOUT, max_retries=MAX_RETRIES)
+    except anthropic.AnthropicError:
+        return None
+
+    return client if (client.api_key or client.auth_token) else None
+
+
+# Resolved at import time; None when the key is missing, so a missing key disables
+# this provider instead of crashing the whole tool.
+_default_client = _build_default_client()
 
 
 class AnthropicProvider:

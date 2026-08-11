@@ -16,6 +16,7 @@ from resources.call_policy import (
 )
 from resources.log_repository import JsonlLogWriter, LogRepository
 from resources.providers import registry
+from resources.providers.provider_anthropic import AnthropicProvider
 from resources.services import service_ask as svc
 from tests.fakes import (
     BadResultProvider,
@@ -65,6 +66,29 @@ def test_ask_unknown_provider_is_logged_failure(fake_providers):
     assert log.success is False
     assert log.error_type == "KeyError"
     assert log.result is None
+    assert "nope" in log.error  # the reason, not the string "None"
+
+
+def test_unavailable_client_is_logged_with_its_reason(monkeypatch):
+    # Regression: run_chat's pre-billing guard raises RuntimeError(print_error(...)),
+    # and print_error returned None - so a run that failed for the single most
+    # common reason (no API key) recorded error_type="RuntimeError" and the
+    # literal string "None" as its explanation. A failed run's only record of
+    # why it failed was blank.
+    #
+    # Driven through a real provider with client=None rather than a fake, because
+    # the value being checked is produced by runner.run_chat, not by the service.
+    monkeypatch.setattr(
+        registry, "PROVIDERS", {"anthropic": AnthropicProvider(client=None)}
+    )
+
+    log = svc.ask("s", "q", "anthropic", "claude-haiku-4-5", persist=False)
+
+    assert log.success is False
+    assert log.error_type == "RuntimeError"
+    assert log.error != "None"
+    assert "anthropic" in log.error
+    assert "API key" in log.error
 
 
 def test_log_records_the_requested_model_even_when_the_call_fails(fake_providers):
