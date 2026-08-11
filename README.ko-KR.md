@@ -48,13 +48,34 @@ pip install -r requirements.txt
 
 ### 2. 환경 변수 설정
 
-프로젝트 루트에서 `.env.example`을 `.env`로 복사한 뒤, 보유한 API 키를 채워 넣으세요. 모든 키는 선택 사항입니다. 키가 없으면 도구 전체가 멈추는 대신 해당 프로바이더 하나만 비활성화됩니다:
+이 도구는 `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` 세 개의 키를 읽습니다. 모든 키는 선택 사항이며, 키가 없으면 도구 전체가 멈추는 대신 해당 프로바이더 하나만 비활성화됩니다.
+
+키를 넣는 방법은 두 가지이며, **OS 환경 변수를 먼저 읽고 항상 우선합니다.** `.env`는 OS 환경 변수가 채우지 않은 값만 보완합니다.
+
+**권장 — OS 환경 변수.** 프로젝트 디렉터리 바깥에 있으므로 저장소와 함께 커밋·압축·공유될 수 없습니다:
+
+```powershell
+# Windows (PowerShell): setx는 사용자 프로필에 기록합니다. 실행한 셸에는 반영되지 않으므로
+# 반드시 새 셸을 여세요.
+setx OPENAI_API_KEY "your-openai-api-key-here"
+```
+
+```bash
+# macOS/Linux: ~/.zshrc 또는 ~/.bashrc에 추가
+export OPENAI_API_KEY="your-openai-api-key-here"
+```
+
+**대체 수단 — `.env` 파일.** 프로젝트 루트에서 `.env.example`을 `.env`로 복사한 뒤 보유한 키를 채워 넣으세요:
 
 ```dotenv
 OPENAI_API_KEY=your-openai-api-key-here
 ANTHROPIC_API_KEY=your-anthropic-api-key-here
 GEMINI_API_KEY=your-gemini-api-key-here
 ```
+
+`.env`는 gitignore로 차단되어 있지만 저장소 안의 평문 파일이라는 점은 그대로입니다. 실제 유출은 커밋보다 폴더를 압축해 공유하는 경로에서 발생합니다. 두 방식 모두 키를 암호화해 저장하지 않으며, 내 계정 권한으로 도는 프로세스라면 어느 쪽이든 읽을 수 있습니다.
+
+`.env`는 시작 시 한 번(`resources/env.py`, `resources/__init__.py`에서 호출) **모든 프로바이더 클라이언트가 생성되기 전에** 로드되므로, 두 방식은 모든 명령에서 동일하게 동작합니다.
 
 설정 상태는 언제든 아래 명령으로 검증할 수 있습니다:
 

@@ -3,23 +3,18 @@
 import os
 import sys
 
-try:
-    from dotenv import load_dotenv
-except ModuleNotFoundError:
-    print("Error Message: 'python-dotenv' package is not installed.")
-    print("Please run and install 'pip install python-dotenv' on the terminal.")
-    sys.exit(1)
-
 
 def check_environment_variables():
     """
     Check OpenAI, Claude and Gemini API environment variables.
+
+    Reads os.environ only. The .env fallback is already loaded by env.load_env()
+    at package import - loading it here instead would report on an environment
+    the providers never saw, since their clients are built before this runs.
     """
     print("\nChecking environment variables...\n")
 
-    load_dotenv()  # 1) Load environment variables from a .env file into the application's environment using the load_dotenv function from the python-dotenv library.
-
-    # 2) Required environment variables per provider. Driven by one table so adding
+    # 1) Required environment variables per provider. Driven by one table so adding
     #    a provider is a single entry instead of three more parallel blocks.
     REQUIRED_VARS = {
         "OpenAI": ["OPENAI_API_KEY"],
@@ -32,7 +27,7 @@ def check_environment_variables():
         for provider, keys in REQUIRED_VARS.items()
     }
 
-    # 3) Providers are optional (each provider_*.py sets its client to None instead of
+    # 2) Providers are optional (each provider_*.py sets its client to None instead of
     # failing when its key is missing), so warn about missing keys instead of exiting.
     for provider, missing_vars in missing_by_provider.items():
         if missing_vars:
@@ -45,11 +40,11 @@ def check_environment_variables():
                 f".env file is missing {provider} API's required variables. Please check .env.example for the required variables.\n"
             )
 
-    # 4) If all required environment variables are set, print a confirmation message.
+    # 3) If all required environment variables are set, print a confirmation message.
     if not any(missing_by_provider.values()):
         print("All environment variables are set.\n")
 
-    # 5) Optionally, show the last 4 characters of APIs' required environment variables for verification (avoid printing the entire key for security reasons).
+    # 4) Optionally, show the last 4 characters of APIs' required environment variables for verification (avoid printing the entire key for security reasons).
     while True:
         try:
             check_values = input(
