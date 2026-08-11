@@ -244,7 +244,7 @@ def _render_history_entry(log) -> None:
     else:
         # log.model (the requested one) is the only model a failed run knows.
         typer.echo(
-            f"\n[{ts}] {styled_providers_name}/{styled_providers_name}  {fail}  {_price(log)}"
+            f"\n[{ts}] {styled_providers_name}/{styled_models_name}  {fail}  {_price(log)}"
         )
         typer.echo(f"{q}: {_snippet(log.user_prompt)}")
         typer.echo(f"{e}: {_snippet(log.error_type)}")
