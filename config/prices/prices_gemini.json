@@ -2,18 +2,38 @@
     "provider": "Google",
     "currency": "USD",
     "unit": "per_1m_tokens",
-    "updated_at": "2026-07-11",
-    "source": "https://ai.google.dev/gemini-api/docs/pricing?hl=ko#standard",
+    "updated_at": "2026-08-12",
+    "source": "https://ai.google.dev/gemini-api/docs/pricing?hl=ko",
     "models": {
+        "gemini-3.6-flash": {
+            "input": 1.50,
+            "cached_input": 0.15,
+            "output": 7.50
+        },
         "gemini-3.5-flash": {
             "input": 1.50,
             "cached_input": 0.15,
             "output": 9.00
         },
+        "gemini-3.5-flash-lite": {
+            "input": 0.30,
+            "cached_input": 0.03,
+            "output": 2.50
+        },
         "gemini-3.1-flash-lite": {
             "input": 0.25,
             "cached_input": 0.025,
             "output": 1.50
+        },
+        "gemini-3.1-pro-preview": {
+            "input": 2.00,
+            "cached_input": 0.20,
+            "output": 12.00
+        },
+        "gemini-3-flash-preview": {
+            "input": 0.50,
+            "cached_input": 0.05,
+            "output": 3.00
         },
         "gemini-2.5-pro": {
             "input": 1.25,
@@ -25,15 +45,10 @@
             "cached_input": 0.03,
             "output": 2.50
         },
-        "gemini-3.1-pro-preview": {
-            "input": 2.00,
-            "cached_input": 0.20,
-            "output": 12.00
-        },
-        "gemini-3-flash-preview": {
-            "input": 0.50,
-            "cached_input": 0.05,
-            "output": 3.00
+        "gemini-2.5-flash-lite": {
+            "input": 0.10,
+            "cached_input": 0.01,
+            "output": 0.40
         }
     }
 }
