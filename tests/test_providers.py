@@ -1,4 +1,4 @@
-"""Per-provider parsing/mapping tests (no paid calls; price tables are temp files)."""
+# Per-provider parsing/mapping tests (no paid calls; price tables are temp files).
 
 from __future__ import annotations
 

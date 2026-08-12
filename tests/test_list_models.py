@@ -1,4 +1,4 @@
-"""Tests for the free `list-models` command (no API calls; clients are fakes)."""
+# Tests for the free `list-models` command (no API calls; clients are fakes).
 
 from __future__ import annotations
 

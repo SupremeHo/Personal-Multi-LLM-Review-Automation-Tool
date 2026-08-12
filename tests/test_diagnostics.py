@@ -1,4 +1,4 @@
-"""Tests for the shared error-line helper."""
+# Tests for the shared error-line helper.
 
 from __future__ import annotations
 

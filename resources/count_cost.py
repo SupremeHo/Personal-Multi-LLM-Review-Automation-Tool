@@ -1,5 +1,6 @@
 # Module that calculates the cost of API calls based on the number of tokens used and the model's pricing.
 # Read the API models' list stored in /config/prices/prices_openai.json and calculate the cost.
+
 from __future__ import annotations
 
 import datetime

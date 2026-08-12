@@ -1,4 +1,4 @@
-"""Provider registry tests."""
+# Provider registry tests.
 
 from __future__ import annotations
 
