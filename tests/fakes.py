@@ -87,18 +87,34 @@ def fake_openai_client(response=None, calls: list | None = None):
 
 
 # --- Anthropic-shaped fakes -------------------------------------------------
+# Content blocks carry a `type` discriminator, as the real SDK's do. An earlier
+# fake omitted it and only ever produced one text block, which is why parsing
+# blindly by position (content[0].text) looked correct in the suite while
+# blowing up on any real answer that came with a thinking block in front of it.
+def anthropic_text_block(text: str = "bonjour from claude"):
+    return types.SimpleNamespace(type="text", text=text)
+
+
+def anthropic_thinking_block(thinking: str = "let me work through this"):
+    """An extended-thinking block: reasoning on `.thinking`, and no `.text`."""
+    return types.SimpleNamespace(type="thinking", thinking=thinking, signature="sig")
+
+
 def make_anthropic_response(
-    model: str = "claude-test", cache_creation: int = 30, cache_read: int = 10
+    model: str = "claude-test",
+    cache_creation: int = 30,
+    cache_read: int = 10,
+    content: list | None = None,
 ):
+    """Pass ``content`` to supply the block list; defaults to a single text block."""
     usage = types.SimpleNamespace(
         input_tokens=200,
         output_tokens=80,
         cache_creation_input_tokens=cache_creation,
         cache_read_input_tokens=cache_read,
     )
-    block = types.SimpleNamespace(text="bonjour from claude")
     return types.SimpleNamespace(
-        content=[block],
+        content=[anthropic_text_block()] if content is None else content,
         usage=usage,
         model=model,
         id="raw-anthropic",
