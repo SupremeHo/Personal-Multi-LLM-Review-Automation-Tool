@@ -48,13 +48,34 @@ pip install -r requirements.txt
 
 ### 2. Environment Setup
 
-Copy `.env.example` to `.env` in the project root and fill in the API keys you have. All keys are optional—a missing key simply disables that one provider instead of crashing the tool:
+The tool reads three keys—`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`. All of them are optional: a missing key simply disables that one provider instead of crashing the tool.
+
+There are two supported ways to supply them. **OS environment variables are read first and always win**; `.env` only fills in what they leave unset.
+
+**Recommended—OS environment variables.** They live outside the project directory, so they cannot be committed, zipped, or shared along with the repo:
+
+```powershell
+# Windows (PowerShell): setx writes to your user profile. Open a NEW shell afterwards—
+# setx does not affect the session you run it in.
+setx OPENAI_API_KEY "your-openai-api-key-here"
+```
+
+```bash
+# macOS/Linux: add to ~/.zshrc or ~/.bashrc
+export OPENAI_API_KEY="your-openai-api-key-here"
+```
+
+**Fallback—`.env` file.** Copy `.env.example` to `.env` in the project root and fill in the keys you have:
 
 ```dotenv
 OPENAI_API_KEY=your-openai-api-key-here
 ANTHROPIC_API_KEY=your-anthropic-api-key-here
 GEMINI_API_KEY=your-gemini-api-key-here
 ```
+
+`.env` is gitignored, but it is still a plaintext file inside the repo—the usual leak is a folder that gets zipped or shared, not a commit. Neither method encrypts the key at rest; both are readable by any process running as you.
+
+The `.env` file is loaded once at startup (`resources/env.py`, called from `resources/__init__.py`) **before any provider client is constructed**, so both methods behave identically for every command.
 
 Validate your setup at any time with:
 

@@ -69,7 +69,7 @@ def test_run_chat_client_none_raises_before_billing(tmp_path):
     def call_api(request):
         raise AssertionError("paid call must not happen when client is None")
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError) as excinfo:
         run_chat(
             request=_request(),
             provider_name="x",
@@ -78,6 +78,12 @@ def test_run_chat_client_none_raises_before_billing(tmp_path):
             call_api=call_api,
             parse_response=lambda raw: _parsed(),
         )
+
+    # The guard raises RuntimeError(print_error(...)), so the reason survives
+    # only if print_error hands the message back. It used to return None, which
+    # made str(e) the string "None" - see test_diagnostics.
+    assert "x" in str(excinfo.value)
+    assert str(excinfo.value) != "None"
 
 
 def test_run_chat_cost_failure_preserves_billed_response(tmp_path):

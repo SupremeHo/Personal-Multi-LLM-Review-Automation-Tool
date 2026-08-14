@@ -27,6 +27,35 @@ except anthropic.AnthropicError:
     _default_client = None
 
 
+def _answer_text(content: Any) -> str:
+    """
+    Join the answer out of Anthropic's content-block list.
+
+    The blocks are a heterogeneous sequence, and the answer is NOT always the
+    first of them: with extended thinking on (the default on claude-sonnet-5 and
+    the other 5-series models, where a request that omits the `thinking` parameter
+    runs adaptive thinking) content[0] is a `thinking` block, which carries the
+    reasoning on `.thinking` and has no `.text` at all. Indexing content[0].text
+    therefore raised AttributeError on exactly the questions the model chose to
+    think about - after the call had already been billed.
+
+    So blocks are selected by `type` and concatenated rather than indexed by
+    position: skipping the non-text blocks also covers `redacted_thinking` and
+    tool-use blocks, and joining covers the several-text-blocks case (citations
+    split the answer into one block per cited span, which must be rejoined in
+    order). The separator is empty because the blocks are contiguous pieces of
+    one message, not separate messages.
+
+    Returns an empty string when the response carries no text block at all - a
+    real outcome when max_tokens is exhausted during thinking. That is left to
+    the service layer, which already treats an empty body as an unusable answer;
+    raising here would discard a response that was paid for.
+    """
+    return "".join(
+        block.text for block in content if getattr(block, "type", None) == "text"
+    )
+
+
 class AnthropicProvider:
     """Anthropic implementation of the ChatProvider contract (see base_provider)."""
 
@@ -61,8 +90,7 @@ class AnthropicProvider:
         )
 
     def _parse_response(self, response: Any) -> ParsedResponse:
-        # Anthropic returns a list of content blocks; the text lives on the first block.
-        text = response.content[0].text
+        text = _answer_text(response.content)
         usage = response.usage
 
         # Anthropic splits cache accounting into creation (write) and read counts.

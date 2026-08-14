@@ -1,4 +1,4 @@
-"""CLI rendering tests (no paid calls; providers and storage are redirected)."""
+# CLI rendering tests (no paid calls; providers and storage are redirected).
 
 from __future__ import annotations
 
