@@ -161,12 +161,14 @@ def make_result(
     text: str = "ok",
     *,
     costed: bool = True,
+    finish_reason: str | None = None,
 ):
     """
     Build a result for a fake provider.
 
     Costed by default, so a batch of healthy fakes reports a clean audit status.
-    Pass costed=False for the billed-but-uncosted case (PaidResponseError).
+    Pass costed=False for the billed-but-uncosted case (PaidResponseError), and
+    finish_reason to exercise the truncation path.
     """
     cost = (
         CostInfo(input_usd=0.0001, output_usd=0.0002, total_usd=0.0003, estimated=True)
@@ -178,6 +180,7 @@ def make_result(
         provider=provider,
         model=request.selected_model,
         response_text=text,
+        finish_reason=finish_reason,
         usage=TokenUsageInfo(input_tokens=1, output_tokens=1, total_tokens=2),
         cost=cost,
     )
@@ -204,6 +207,26 @@ class EmptyAnswerProvider:
 
     def ask(self, request: LLMRequest) -> LLMCallResult:
         return make_result(request, "empty", text="   ")
+
+
+class TruncatedProvider:
+    """
+    A call that succeeded and bills, but ran out of tokens mid-answer.
+
+    The body is non-empty and looks like a whole answer, which is exactly why it
+    must not vote: reasoning shares the max_tokens ceiling, so this is the common
+    shape of a wasted comparison, not a rare one.
+    """
+
+    provider_name = "truncated"
+
+    def ask(self, request: LLMRequest) -> LLMCallResult:
+        return make_result(
+            request,
+            "truncated",
+            text="The three candidate causes are: first, the",
+            finish_reason="MAX_TOKENS",  # Gemini's spelling; matching is case-insensitive
+        )
 
 
 class PaidFailProvider:

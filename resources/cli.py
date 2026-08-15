@@ -25,13 +25,31 @@ def _price(log) -> str:
     )
 
 
+def _truncation_tag(result) -> str:
+    """
+    Flag an answer the model was cut off mid-way through, or "" when it finished.
+
+    Printed next to the price because such an answer looks complete but does not
+    count toward the quorum (see service_ask.usable_responses) - without saying so,
+    the usable count and the visible answers appear to disagree.
+    """
+    if service_ask.is_truncated(result):
+        return typer.style(
+            f"  [TRUNCATED: {result.finish_reason}]", fg=typer.colors.YELLOW, bold=True
+        )
+    return ""
+
+
 def _render_log(log) -> None:
     """Print a single call's outcome (success, salvaged partial, or failure)."""
     provider = typer.style(log.provider, fg=typer.colors.BRIGHT_BLUE)
     model = typer.style(log.model, fg=typer.colors.MAGENTA)
 
     if log.success and log.result is not None:
-        typer.echo(f"\n==== {provider} / {model}'s response  [{_price(log)}] ====\n")
+        typer.echo(
+            f"\n==== {provider} / {model}'s response  "
+            f"[{_price(log)}]{_truncation_tag(log.result)} ====\n"
+        )
         typer.echo(f"{log.result.response_text}\n")
     elif log.result is not None:
         # Billed but a later step failed; the paid response was preserved.
@@ -53,7 +71,7 @@ def _render_compare_entry(log) -> None:
     label = f"{log.provider} / {log.model}"
 
     if log.success and log.result is not None:
-        typer.echo(f"\n---- {label}  [{_price(log)}] ----")
+        typer.echo(f"\n---- {label}  [{_price(log)}]{_truncation_tag(log.result)} ----")
         typer.echo(log.result.response_text)
     elif log.result is not None:
         typer.echo(f"\n---- {label}  [{_price(log)}]  [PARTIAL: {log.error_type}] ----")

@@ -17,6 +17,7 @@ from resources.call_policy import (
 from resources.log_repository import JsonlLogWriter, LogRepository
 from resources.providers import registry
 from resources.providers.provider_anthropic import AnthropicProvider
+from resources.schemas import LLMRequest
 from resources.services import service_ask as svc
 from tests.fakes import (
     BadResultProvider,
@@ -29,6 +30,8 @@ from tests.fakes import (
     PaidFailProvider,
     ParseFailProvider,
     SlowProvider,
+    TruncatedProvider,
+    make_result,
 )
 
 
@@ -299,6 +302,67 @@ def test_usable_responses_exclude_an_empty_answer(monkeypatch):
     assert len(result.successes) == 2  # both calls worked...
     assert [r.provider for r in result.usable_responses] == ["good"]
     assert result.collection_status == "insufficient"  # ...but there is no comparison
+
+
+def test_usable_responses_exclude_an_answer_cut_off_mid_sentence(monkeypatch):
+    # Measured live on gemini-2.5-flash at the default 4096: thinking spent 3928
+    # tokens, left 164 for the answer, and it came back finish_reason=MAX_TOKENS
+    # truncated. The body is non-empty, so it used to count as a whole answer and
+    # carry a vote - a half-formed conclusion presented as cross-checked.
+    monkeypatch.setattr(
+        registry,
+        "PROVIDERS",
+        {"good": GoodProvider(), "truncated": TruncatedProvider()},
+    )
+
+    result = svc.compare("s", "q", [("good", "m1"), ("truncated", "m2")], persist=False)
+
+    assert len(result.successes) == 2  # both calls worked and were billed...
+    assert [r.provider for r in result.usable_responses] == ["good"]
+    assert result.collection_status == "insufficient"  # ...but only one can be compared
+
+
+def test_a_truncated_answer_is_still_logged_and_costed(monkeypatch):
+    # Not voting is not the same as being discarded: the paid response keeps its
+    # body, its cost and its place in the audit trail, so nothing regresses against
+    # the billing invariant. Only the quorum claim is withheld.
+    monkeypatch.setattr(
+        registry,
+        "PROVIDERS",
+        {"good": GoodProvider(), "truncated": TruncatedProvider()},
+    )
+
+    result = svc.compare("s", "q", [("good", "m1"), ("truncated", "m2")], persist=False)
+    truncated = next(log for log in result.logs if log.provider == "truncated")
+
+    assert truncated.success is True
+    assert truncated.result.response_text  # the partial answer is still readable
+    assert truncated.result.cost is not None
+    assert result.audit_status == "clean"  # the money ledger is complete
+
+
+@pytest.mark.parametrize("reason", ["MAX_TOKENS", "max_tokens", "length"])
+def test_every_provider_spelling_of_truncation_is_recognised(reason):
+    # Gemini shouts its enum, Anthropic says max_tokens, OpenAI says length.
+    result = make_result(
+        LLMRequest(
+            response_id="rid", system_prompt="s", user_question="q", selected_model="m"
+        ),
+        finish_reason=reason,
+    )
+
+    assert svc.is_truncated(result) is True
+
+
+def test_a_normally_finished_answer_is_not_truncated():
+    result = make_result(
+        LLMRequest(
+            response_id="rid", system_prompt="s", user_question="q", selected_model="m"
+        ),
+        finish_reason="stop",
+    )
+
+    assert svc.is_truncated(result) is False
 
 
 def test_a_lone_success_is_insufficient_not_complete(fake_providers):
