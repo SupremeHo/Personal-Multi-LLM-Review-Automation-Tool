@@ -129,7 +129,7 @@ Run from the **project root** as a module (not `cd resources`). `ask` and `compa
 
 ```bash
 python -m resources.cli ask "<system_prompt>" "<user_question>"
-# defaults: --provider openai --model gpt-4o-mini
+# defaults: --provider openai --model gpt-5.6-luna
 
 python -m resources.cli ask "<system_prompt>" "<user_question>" \
   --provider anthropic --model claude-haiku-4-5
@@ -139,7 +139,7 @@ python -m resources.cli ask "<system_prompt>" "<user_question>" \
 
 ```bash
 python -m resources.cli compare "<system_prompt>" "<user_question>" \
-  -t openai:gpt-4o-mini -t anthropic:claude-haiku-4-5
+  -t openai:gpt-5.6-terra -t anthropic:claude-haiku-4-5
 ```
 
 **Other commands:**

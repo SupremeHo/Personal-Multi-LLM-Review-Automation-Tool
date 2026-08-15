@@ -54,10 +54,11 @@ Two things to weigh before setting it:
   * Thinking tokens bill at the output rate and are NOT included in
     candidates_token_count - see _parse_response, which adds them back in.
   * request.max_tokens caps thinking AND the answer together. Measured on
-    gemini-2.5-flash at the default 4096: a puzzle question spent 3928 tokens
-    thinking, left 164 for the answer, and came back finish_reason=MAX_TOKENS
-    with the answer cut off. Raising the level without raising the ceiling buys
-    truncated answers at a higher price.
+    gemini-2.5-flash at the then-default 4096: a puzzle question spent 3928
+    tokens thinking, left 164 for the answer, and came back
+    finish_reason=MAX_TOKENS with the answer cut off. The default is now
+    schemas.DEFAULT_MAX_TOKENS (16,384), but raising the level without raising
+    the ceiling still buys truncated answers at a higher price.
 
 `include_thoughts=True` is safe for the answer body - response.text skips parts
 flagged `thought` - but the summaries it returns are billed like the rest.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import sqlite3
 import threading
 from datetime import timedelta
@@ -17,7 +18,7 @@ from resources.call_policy import (
 from resources.log_repository import JsonlLogWriter, LogRepository
 from resources.providers import registry
 from resources.providers.provider_anthropic import AnthropicProvider
-from resources.schemas import LLMRequest
+from resources.schemas import DEFAULT_MAX_TOKENS, LLMRequest
 from resources.services import service_ask as svc
 from tests.fakes import (
     BadResultProvider,
@@ -304,8 +305,22 @@ def test_usable_responses_exclude_an_empty_answer(monkeypatch):
     assert result.collection_status == "insufficient"  # ...but there is no comparison
 
 
+def test_every_max_tokens_default_comes_from_one_constant():
+    # The ceiling used to be written as a bare 4096 in four places, and the CLI has
+    # no --max-tokens flag, so these service defaults - not the schema's - are what
+    # actually reach the provider. Raising only the schema silently changed nothing.
+    signatures = [svc.make_request, svc.ask, svc.compare]
+    defaults = {
+        f.__name__: inspect.signature(f).parameters["max_tokens"].default
+        for f in signatures
+    }
+
+    assert set(defaults.values()) == {DEFAULT_MAX_TOKENS}, defaults
+    assert svc.make_request("s", "q", "m").max_tokens == DEFAULT_MAX_TOKENS
+
+
 def test_usable_responses_exclude_an_answer_cut_off_mid_sentence(monkeypatch):
-    # Measured live on gemini-2.5-flash at the default 4096: thinking spent 3928
+    # Measured live on gemini-2.5-flash at the then-default 4096: thinking spent 3928
     # tokens, left 164 for the answer, and it came back finish_reason=MAX_TOKENS
     # truncated. The body is non-empty, so it used to count as a whole answer and
     # carry a vote - a half-formed conclusion presented as cross-checked.

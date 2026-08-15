@@ -112,12 +112,12 @@ def ask(
     system_prompt: str,
     user_question: str,
     provider: str = "openai",
-    model: str = "gpt-4o-mini",
+    model: str = "gpt-5.6-luna",
 ):
     """
     Ask a single provider/model a question; logs to JSONL + SQLite.
 
-    Defaults to OpenAI gpt-4o-mini if no provider/model is specified. The system prompt is optional but recommended.
+    Defaults to OpenAI gpt-5.6-luna if no provider/model is specified. The system prompt is optional but recommended.
     """
     log = service_ask.ask(system_prompt, user_question, provider, model)
     _render_log(log)
@@ -131,7 +131,7 @@ def compare(
         None,
         "--target",
         "-t",
-        help="A provider:model pair to query, e.g. -t openai:gpt-4o-mini. Repeatable.",
+        help="A provider:model pair to query, e.g. -t openai:gpt-5.6-terra. Repeatable.",
     ),
 ):
     """
@@ -142,7 +142,7 @@ def compare(
     """
     if not target:
         typer.echo(
-            "[cli.py] Provide at least one --target (e.g. -t openai:gpt-4o-mini "
+            "[cli.py] Provide at least one --target (e.g. -t openai:gpt-5.6-terra "
             "-t anthropic:claude-haiku-4-5)."
         )
         raise typer.Exit(code=1)

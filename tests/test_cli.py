@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import inspect
+
 import pytest
 from typer.testing import CliRunner
 
 from resources import cli
-from resources.providers import registry
+from resources.count_cost import preflight_pricing
+from resources.providers import provider_openai, registry
 from resources.services import service_ask as svc
 from tests.fakes import (
     FailProvider,
@@ -37,6 +40,19 @@ def cli_env(monkeypatch, tmp_path, temp_db):
 
 def _headers(output: str) -> list[str]:
     return [line for line in output.splitlines() if line.startswith("---- ")]
+
+
+def test_the_default_ask_target_is_priced():
+    # `ask` is the one command that can run with no model argument, so its default
+    # has to survive preflight_pricing - an unpriced default means the tool's
+    # simplest invocation fails before it ever reaches the API. Nothing pinned this
+    # while the default was gpt-4o-mini, so moving it to gpt-5.6-luna was untested.
+    defaults = {
+        p.name: p.default for p in inspect.signature(cli.ask).parameters.values()
+    }
+
+    assert defaults["provider"] == "openai"
+    preflight_pricing(provider_openai.PRICE_PATH_OPENAI, defaults["model"])
 
 
 def test_compare_renders_answers_in_target_order(cli_env):

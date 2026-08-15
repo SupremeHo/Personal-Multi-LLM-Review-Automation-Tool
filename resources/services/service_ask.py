@@ -28,6 +28,7 @@ from resources.log_repository import default_repository
 from resources.providers.registry import get_provider
 from resources.providers.response_error import PaidResponseError
 from resources.schemas import (
+    DEFAULT_MAX_TOKENS,
     AuditStatus,
     CallPolicyInfo,
     CollectionStatus,
@@ -51,10 +52,11 @@ One entry per provider's spelling, compared lowercased because Gemini shouts its
 enum: OpenAI says `length`, Anthropic `max_tokens`, Gemini `MAX_TOKENS`.
 
 This matters because reasoning shares the max_tokens ceiling with the answer, so
-truncation stopped being an edge case: measured on gemini-2.5-flash at the default
-4096, a puzzle question spent 3928 tokens thinking and had the answer cut off with
-164 left. The body is non-empty, so without this the cut-off text counted as a
-whole answer.
+truncation stopped being an edge case: measured on gemini-2.5-flash at the
+then-default 4096, a puzzle question spent 3928 tokens thinking and had the answer
+cut off with 164 left. The body is non-empty, so without this the cut-off text
+counted as a whole answer. The ceiling is now DEFAULT_MAX_TOKENS (16,384), which
+buys room but does not remove the coupling - the CLI's default model reasons too.
 """
 
 
@@ -79,7 +81,7 @@ def make_request(
     user_question: str,
     selected_model: str,
     *,
-    max_tokens: int = 4096,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
 ) -> LLMRequest:
     """Build an LLMRequest with a freshly minted response_id (service owns identity)."""
     return LLMRequest(
@@ -241,7 +243,7 @@ def ask(
     provider_name: str,
     selected_model: str,
     *,
-    max_tokens: int = 4096,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
     persist: bool = True,
 ) -> LLMCallLog:
     """
@@ -379,7 +381,7 @@ def compare(
     user_question: str,
     targets: list[tuple[str, str]],
     *,
-    max_tokens: int = 4096,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
     persist: bool = True,
 ) -> CompareResult:
     """

@@ -36,10 +36,24 @@ default", and that differs per model - the GPT-5 family reasons out of the box
 (gpt-5.5 defaults to medium effort), while the gpt-4o family does not reason at
 all and REJECTS the parameter.
 
-None is the default because the accepted values are model-dependent too
-(`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, with each model
-supporting only a subset), and the price table spans both families. Pinning one
-value here would make the CLI's own default model - gpt-4o-mini - fail.
+None is the default because the accepted values are model-dependent too, and the
+price table spans several generations. Measured across it (a deliberately
+over-large max_completion_tokens makes the 400 free, and the rejected `param`
+names which field failed):
+
+  * gpt-5.2 / 5.4 / 5.5 / 5.6:  none, low, medium, high, xhigh   (no `minimal`)
+  * gpt-5.1:                    none, low, medium, high
+  * gpt-5 / -mini / -nano:      minimal, low, medium, high       (no `none`)
+  * every `-pro` model:         rejects the parameter outright
+
+Not one value is common to that list, so omitting is the only setting the whole
+table accepts.
+
+Note this is NOT a way to keep the default path cheap. The CLI's default model is
+gpt-5.6-luna, which reasons out of the box, and `none` would switch that off - but
+the knob is module-global, so pinning it here would 400 the gpt-4o family (which
+rejects the parameter), the `-pro` models, and gpt-5/-mini/-nano. Set it per call
+site, or not at all.
 
 Unlike Gemini, nothing needs correcting downstream: OpenAI counts reasoning
 tokens INSIDE completion_tokens, so the cost was always right. What was missing
