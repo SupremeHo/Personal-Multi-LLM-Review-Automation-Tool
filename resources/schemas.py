@@ -42,7 +42,17 @@ class TokenUsageInfo(BaseModel):
     """Number of tokens in the prompt."""
 
     output_tokens: int
-    """Number of tokens in the generated completion."""
+    """
+    Everything billed at the provider's output rate.
+
+    Normalized by the providers so this means the same thing everywhere, because
+    the vendors disagree: OpenAI's `completion_tokens` already includes reasoning,
+    while Gemini's `candidates_token_count` excludes `thoughts_token_count` and
+    counts it as a separate addend of the total. Reading the raw field on Gemini
+    therefore undercharges the whole reasoning pass - measured at ~23x on
+    gemini-2.5-flash, which thinks by default. Reconciling that is the provider
+    parser's job, not the caller's; see `reasoning_tokens` for the breakdown.
+    """
 
     total_tokens: int | None = None
     """
@@ -50,6 +60,20 @@ class TokenUsageInfo(BaseModel):
 
     Optional: some providers (e.g. Anthropic) do not return a total, so the
     service/storage layer may derive it from input + output when it is None.
+    """
+
+    reasoning_tokens: int | None = None
+    """
+    How much of `output_tokens` was spent reasoning, when the provider says.
+
+    A single neutral field rather than one name per provider (unlike the cache
+    counts below): "tokens spent thinking, billed at the output rate" means the
+    same thing on OpenAI and Gemini. The only difference is whether the vendor's
+    own output count already includes them, and the parsers absorb that.
+
+    None means the provider does not report it, NOT that no reasoning happened -
+    Anthropic bills thinking as output tokens without ever breaking out a count,
+    so on that provider the share is unknowable (see provider_anthropic.THINKING).
     """
 
     # --- Cache accounting (provider-specific semantics, preserved separately) ---

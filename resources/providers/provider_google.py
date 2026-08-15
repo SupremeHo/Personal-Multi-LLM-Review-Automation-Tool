@@ -74,10 +74,24 @@ class GoogleProvider:
 
         cached_tokens = usage.cached_content_token_count
 
+        # Thinking tokens are billed at the output rate but live OUTSIDE
+        # candidates_token_count: the API defines total_token_count as the sum of
+        # prompt + candidates + tool_use_prompt + thoughts, and Google's pricing
+        # docs say "response pricing is the sum of output tokens and thinking
+        # tokens". Reading candidates_token_count alone therefore billed for the
+        # answer and nothing for the reasoning that produced it - measured at
+        # ~23x under on gemini-2.5-flash, which thinks by default. Adding them
+        # here is what keeps TokenUsageInfo.output_tokens meaning the same thing
+        # on every provider, and fixes cost by construction (runner.run_chat
+        # bills from output_tokens).
+        thoughts = usage.thoughts_token_count or 0
+        billable_output = (usage.candidates_token_count or 0) + thoughts
+
         token_usage = TokenUsageInfo(
             input_tokens=usage.prompt_token_count,
-            output_tokens=usage.candidates_token_count,
-            total_tokens=usage.total_token_count,
+            output_tokens=billable_output,
+            total_tokens=usage.total_token_count,  # already counts thoughts
+            reasoning_tokens=thoughts,
             cached_input_tokens=cached_tokens,
         )
 
@@ -86,7 +100,12 @@ class GoogleProvider:
         finish_reason = candidate.finish_reason
         return ParsedResponse(
             model=response.model_version,
-            response_text=response.text,
+            # `.text` is None when no text part survives - the thinking-exhausted
+            # case, where max_tokens ran out before the answer began. That is a
+            # billed response, so it must not fail LLMCallResult's `str` validation
+            # and lose its cost record; an empty body is left to the service layer,
+            # which already treats it as unusable (mirrors _answer_text on Anthropic).
+            response_text=response.text or "",
             finish_reason=finish_reason.value if finish_reason else None,
             raw_response_id=getattr(response, "response_id", None),
             usage=token_usage,

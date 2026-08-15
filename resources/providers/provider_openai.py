@@ -74,10 +74,20 @@ class OpenAIProvider:
             else None
         )
 
+        # Reported for visibility only: OpenAI counts these inside completion_tokens
+        # (unlike Gemini, where thoughts sit outside candidates_token_count), so they
+        # must NOT be added to output_tokens - that would bill the reasoning twice.
+        reasoning_tokens = (
+            usage.completion_tokens_details.reasoning_tokens
+            if usage.completion_tokens_details
+            else None
+        )
+
         token_usage = TokenUsageInfo(
             input_tokens=usage.prompt_tokens,
-            output_tokens=usage.completion_tokens,
+            output_tokens=usage.completion_tokens,  # already includes reasoning
             total_tokens=usage.total_tokens,
+            reasoning_tokens=reasoning_tokens,
             cached_input_tokens=cached_tokens,
         )
 

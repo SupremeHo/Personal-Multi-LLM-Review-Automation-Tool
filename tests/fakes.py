@@ -63,13 +63,22 @@ def _recording(response, calls: list | None):
 
 
 # --- OpenAI-shaped fakes ----------------------------------------------------
-def make_openai_response(model: str = "gpt-4o-mini", cached: int = 20):
+def make_openai_response(
+    model: str = "gpt-4o-mini", cached: int = 20, reasoning: int = 30
+):
+    """
+    ``reasoning`` is part of ``completion_tokens``, not added to it - that is how
+    OpenAI reports it, and the fake has to agree or the no-double-billing test
+    passes for the wrong reason.
+    """
     details = types.SimpleNamespace(cached_tokens=cached)
+    completion_details = types.SimpleNamespace(reasoning_tokens=reasoning)
     usage = types.SimpleNamespace(
         prompt_tokens=100,
-        completion_tokens=50,
+        completion_tokens=50,  # 30 of these are reasoning
         total_tokens=150,
         prompt_tokens_details=details,
+        completion_tokens_details=completion_details,
     )
     msg = types.SimpleNamespace(content="hi from openai")
     choice = types.SimpleNamespace(message=msg, finish_reason="stop")
@@ -130,20 +139,36 @@ def fake_anthropic_client(response=None, calls: list | None = None):
 
 
 # --- Google (Gemini)-shaped fakes -------------------------------------------
-def make_google_response(model: str = "gemini-test", cached: int = 15):
+# The default response carries thinking tokens because every priced Gemini model
+# has thinking on, and because a fake without them hides a live billing bug the
+# same way the old Anthropic fake hid the thinking-block one: candidates_token_count
+# EXCLUDES thoughts (total = prompt + candidates + thoughts), so a parser that
+# reads it alone bills the answer and nothing for the reasoning.
+def make_google_response(
+    model: str = "gemini-test",
+    cached: int = 15,
+    thoughts: int = 40,
+    finish_reason: str | None = "STOP",
+    text: str | None = "hi from gemini",
+):
     usage = types.SimpleNamespace(
         prompt_token_count=120,
-        candidates_token_count=60,
-        total_token_count=180,
+        candidates_token_count=60,  # the answer only
+        thoughts_token_count=thoughts,  # billed at the output rate, counted separately
+        total_token_count=120 + 60 + thoughts,
         cached_content_token_count=cached,
     )
-    candidate = types.SimpleNamespace(finish_reason=types.SimpleNamespace(value="STOP"))
+    candidate = types.SimpleNamespace(
+        finish_reason=(
+            types.SimpleNamespace(value=finish_reason) if finish_reason else None
+        )
+    )
     return types.SimpleNamespace(
         candidates=[candidate],
         usage_metadata=usage,
         model_version=model,
         response_id="raw-google",
-        text="hi from gemini",
+        text=text,
     )
 
 

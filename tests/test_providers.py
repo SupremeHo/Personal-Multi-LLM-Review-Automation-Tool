@@ -112,7 +112,23 @@ def test_openai_provider_maps_response(tmp_path):
     assert result.usage.output_tokens == 50
     assert result.usage.total_tokens == 150
     assert result.usage.cached_input_tokens == 20
+    assert result.usage.reasoning_tokens == 30
     assert result.cost is not None
+
+
+def test_openai_reasoning_tokens_are_reported_without_being_billed_twice(tmp_path):
+    # OpenAI counts reasoning INSIDE completion_tokens, unlike Gemini. Reporting the
+    # breakdown must therefore leave output_tokens - and the bill - untouched; adding
+    # it on would charge for the same 30 tokens twice.
+    price = write_price_table(tmp_path / "o.json", "m")
+    provider = OpenAIProvider(
+        client=fake_openai_client(make_openai_response(model="m")), price_path=price
+    )
+    result = provider.ask(_request("m"))
+
+    assert result.usage.reasoning_tokens == 30
+    assert result.usage.output_tokens == 50  # NOT 80
+    assert result.cost.output_usd == pytest.approx(50 / 1_000_000 * 2.0)
 
 
 def test_anthropic_provider_maps_response(tmp_path):
@@ -231,7 +247,57 @@ def test_google_provider_maps_response(tmp_path):
     assert result.response_text == "hi from gemini"
     assert result.finish_reason == "STOP"
     assert result.usage.input_tokens == 120
-    assert result.usage.output_tokens == 60
-    assert result.usage.total_tokens == 180
+    assert result.usage.output_tokens == 100  # 60 answer + 40 thinking
+    assert result.usage.reasoning_tokens == 40
+    assert result.usage.total_tokens == 220
     assert result.usage.cached_input_tokens == 15
     assert result.cost is not None
+
+
+def test_google_bills_thinking_tokens_at_the_output_rate(tmp_path):
+    # Regression, measured live: candidates_token_count EXCLUDES thoughts (the API
+    # defines total as prompt + candidates + thoughts), so reading it alone billed
+    # the answer and nothing for the reasoning that produced it - ~23x under on
+    # gemini-2.5-flash, which thinks by default.
+    price = write_price_table(tmp_path / "g.json", "m")
+    provider = GoogleProvider(
+        client=fake_google_client(make_google_response(model="m", thoughts=400)),
+        price_path=price,
+    )
+    result = provider.ask(_request("m"))
+
+    assert result.usage.output_tokens == 460  # 60 answer + 400 thinking
+    assert result.cost.output_usd == pytest.approx(460 / 1_000_000 * 2.0)
+
+
+def test_google_usage_totals_stay_internally_consistent(tmp_path):
+    # total_token_count already counts thoughts, so an output_tokens that did not
+    # left every Gemini log claiming total != input + output.
+    price = write_price_table(tmp_path / "g.json", "m")
+    provider = GoogleProvider(
+        client=fake_google_client(make_google_response(model="m", thoughts=400)),
+        price_path=price,
+    )
+    usage = provider.ask(_request("m")).usage
+
+    assert usage.total_tokens == usage.input_tokens + usage.output_tokens
+
+
+def test_google_keeps_a_billed_response_whose_text_is_none(tmp_path):
+    # `.text` is None when no text part survives - max_tokens exhausted during
+    # thinking. Passing that to LLMCallResult (response_text: str) failed validation
+    # AFTER billing, degrading a paid call to salvage-only with no cost recorded,
+    # while Anthropic preserves the identical case. It must come back as a costed
+    # result with an empty body, which compare() then judges unusable.
+    price = write_price_table(tmp_path / "g.json", "m")
+    provider = GoogleProvider(
+        client=fake_google_client(
+            make_google_response(model="m", text=None, finish_reason="MAX_TOKENS")
+        ),
+        price_path=price,
+    )
+    result = provider.ask(_request("m"))
+
+    assert result.response_text == ""
+    assert result.finish_reason == "MAX_TOKENS"
+    assert result.cost is not None  # the tokens we were charged for are still priced
