@@ -32,6 +32,37 @@ try:
 except ValueError:
     _default_client = None
 
+THINKING_CONFIG: types.ThinkingConfig | None = None
+"""
+How much reasoning to ask Gemini for. None means the config is not sent.
+
+Stated here rather than inherited, for the same reason as
+provider_anthropic.THINKING: omitting it does not mean "no thinking", it means
+"whatever this model does by default", and the defaults differ per model.
+Every model in prices_gemini.json reports thinking support, and most default to
+ON - gemini-3-flash-preview high, gemini-3.6-flash medium, gemini-3.5-flash-lite
+minimal, gemini-2.5-pro and 2.5-flash enabled; only gemini-2.5-flash-lite is off.
+So the tool is already paying for reasoning on nearly every Gemini target.
+
+None is the default because the knobs are not uniform either: `thinking_level`
+(MINIMAL/LOW/MEDIUM/HIGH) is the current control, `thinking_budget` the older
+token-count one, and which a model honours varies. Pinning one here would trade
+a silent default for an error on part of the table.
+
+Two things to weigh before setting it:
+
+  * Thinking tokens bill at the output rate and are NOT included in
+    candidates_token_count - see _parse_response, which adds them back in.
+  * request.max_tokens caps thinking AND the answer together. Measured on
+    gemini-2.5-flash at the default 4096: a puzzle question spent 3928 tokens
+    thinking, left 164 for the answer, and came back finish_reason=MAX_TOKENS
+    with the answer cut off. Raising the level without raising the ceiling buys
+    truncated answers at a higher price.
+
+`include_thoughts=True` is safe for the answer body - response.text skips parts
+flagged `thought` - but the summaries it returns are billed like the rest.
+"""
+
 
 class GoogleProvider:
     """Google Gemini implementation of the ChatProvider contract (see base_provider)."""
@@ -59,12 +90,15 @@ class GoogleProvider:
     def _call_api(self, request: LLMRequest) -> Any:
         # >>>>> Paid call. Money is spent here. <<<<<
         # Gemini takes the system prompt inside GenerateContentConfig, not as a message.
+        # thinking_config stays None unless the policy sets one (see THINKING_CONFIG);
+        # read at call time, not captured at import, so it stays patchable.
         return self._client.models.generate_content(
             model=request.selected_model,
             contents=request.user_question,
             config=types.GenerateContentConfig(
                 system_instruction=request.system_prompt,
                 max_output_tokens=request.max_tokens,
+                thinking_config=THINKING_CONFIG,
             ),
         )
 

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import pytest
+from google.genai import types
 
-from resources.providers import provider_anthropic
+from resources.providers import provider_anthropic, provider_google, provider_openai
 from resources.providers.base_provider import ChatProvider
 from resources.providers.provider_anthropic import AnthropicProvider
 from resources.providers.provider_google import GoogleProvider
@@ -89,6 +90,58 @@ def test_anthropic_sends_the_configured_thinking_policy(tmp_path, monkeypatch):
     ).ask(_request("m"))
 
     assert calls[0]["thinking"] == {"type": "adaptive"}
+
+
+def test_openai_omits_reasoning_effort_by_default(tmp_path):
+    # The gpt-4o family rejects the parameter outright and the accepted values differ
+    # per model, so sending one unconditionally would break the CLI's own default
+    # model. The default sends nothing.
+    price = write_price_table(tmp_path / "o.json", "m")
+    calls = []
+    OpenAIProvider(
+        client=fake_openai_client(make_openai_response(model="m"), calls=calls),
+        price_path=price,
+    ).ask(_request("m"))
+
+    assert "reasoning_effort" not in calls[0]
+
+
+def test_openai_sends_the_configured_reasoning_effort(tmp_path, monkeypatch):
+    monkeypatch.setattr(provider_openai, "REASONING_EFFORT", "low")
+    price = write_price_table(tmp_path / "o.json", "m")
+    calls = []
+    OpenAIProvider(
+        client=fake_openai_client(make_openai_response(model="m"), calls=calls),
+        price_path=price,
+    ).ask(_request("m"))
+
+    assert calls[0]["reasoning_effort"] == "low"
+
+
+def test_google_omits_thinking_config_by_default(tmp_path):
+    # Which knob a model honours (thinking_level vs thinking_budget) varies across
+    # the price table, so the default leaves the model's own default in place.
+    price = write_price_table(tmp_path / "g.json", "m")
+    calls = []
+    GoogleProvider(
+        client=fake_google_client(make_google_response(model="m"), calls=calls),
+        price_path=price,
+    ).ask(_request("m"))
+
+    assert calls[0]["config"].thinking_config is None
+
+
+def test_google_sends_the_configured_thinking_config(tmp_path, monkeypatch):
+    wanted = types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW)
+    monkeypatch.setattr(provider_google, "THINKING_CONFIG", wanted)
+    price = write_price_table(tmp_path / "g.json", "m")
+    calls = []
+    GoogleProvider(
+        client=fake_google_client(make_google_response(model="m"), calls=calls),
+        price_path=price,
+    ).ask(_request("m"))
+
+    assert calls[0]["config"].thinking_config == wanted
 
 
 def test_providers_satisfy_contract():

@@ -26,6 +26,26 @@ try:
 except openai.OpenAIError:
     _default_client = None
 
+REASONING_EFFORT: str | None = None
+"""
+How much reasoning to ask for. None means the parameter is not sent.
+
+Stated here rather than inherited, for the same reason as
+provider_anthropic.THINKING: omitting it means "whatever this model does by
+default", and that differs per model - the GPT-5 family reasons out of the box
+(gpt-5.5 defaults to medium effort), while the gpt-4o family does not reason at
+all and REJECTS the parameter.
+
+None is the default because the accepted values are model-dependent too
+(`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, with each model
+supporting only a subset), and the price table spans both families. Pinning one
+value here would make the CLI's own default model - gpt-4o-mini - fail.
+
+Unlike Gemini, nothing needs correcting downstream: OpenAI counts reasoning
+tokens INSIDE completion_tokens, so the cost was always right. What was missing
+is only the breakdown, now reported as TokenUsageInfo.reasoning_tokens.
+"""
+
 
 class OpenAIProvider:
     """OpenAI implementation of the ChatProvider contract (see base_provider)."""
@@ -51,6 +71,15 @@ class OpenAIProvider:
         )
 
     def _call_api(self, request: LLMRequest) -> Any:
+        # `reasoning_effort` is sent only when the policy sets one: the gpt-4o family
+        # rejects the parameter and the accepted values differ per model, so an
+        # unconditional kwarg would break part of the price table (see
+        # REASONING_EFFORT). Read at call time, not captured at import, so the policy
+        # stays patchable.
+        reasoning_kwargs: dict[str, Any] = {}
+        if REASONING_EFFORT is not None:
+            reasoning_kwargs["reasoning_effort"] = REASONING_EFFORT
+
         # >>>>> Paid call. Money is spent here. <<<<<
         # max_completion_tokens, not the deprecated max_tokens: newer models reject
         # the old name outright. Without it the request's ceiling silently did not
@@ -62,6 +91,7 @@ class OpenAIProvider:
                 {"role": "system", "content": request.system_prompt},
                 {"role": "user", "content": request.user_question},
             ],
+            **reasoning_kwargs,
         )
 
     def _parse_response(self, response: Any) -> ParsedResponse:
