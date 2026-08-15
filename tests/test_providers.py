@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from resources.providers import provider_anthropic
 from resources.providers.base_provider import ChatProvider
 from resources.providers.provider_anthropic import AnthropicProvider
 from resources.providers.provider_google import GoogleProvider
@@ -58,6 +59,36 @@ def test_every_provider_applies_the_requested_output_ceiling(tmp_path):
     assert openai_calls[0]["max_completion_tokens"] == 123  # not the deprecated name
     assert anthropic_calls[0]["max_tokens"] == 123
     assert google_calls[0]["config"].max_output_tokens == 123
+
+
+def test_anthropic_omits_the_thinking_parameter_by_default(tmp_path):
+    # The parameter's accepted shapes differ per model generation, so there is no
+    # value that works for every model in prices_claude.json: `adaptive` is refused
+    # by opus-4-5/sonnet-4-5/haiku-4-5, `enabled`+budget_tokens by the 5-series and
+    # opus-4-7/4-8, `disabled` by fable-5. Sending one unconditionally would turn a
+    # silent default into a 400 on part of the table, so the default sends nothing.
+    price = write_price_table(tmp_path / "a.json", "m")
+    calls = []
+    AnthropicProvider(
+        client=fake_anthropic_client(make_anthropic_response(model="m"), calls=calls),
+        price_path=price,
+    ).ask(_request("m"))
+
+    assert "thinking" not in calls[0]
+
+
+def test_anthropic_sends_the_configured_thinking_policy(tmp_path, monkeypatch):
+    # ...and when the policy IS set, it reaches the paid call verbatim - the point
+    # of naming it is that flipping the constant actually changes the request.
+    monkeypatch.setattr(provider_anthropic, "THINKING", {"type": "adaptive"})
+    price = write_price_table(tmp_path / "a.json", "m")
+    calls = []
+    AnthropicProvider(
+        client=fake_anthropic_client(make_anthropic_response(model="m"), calls=calls),
+        price_path=price,
+    ).ask(_request("m"))
+
+    assert calls[0]["thinking"] == {"type": "adaptive"}
 
 
 def test_providers_satisfy_contract():

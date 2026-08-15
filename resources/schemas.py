@@ -126,6 +126,11 @@ class LLMRequest(BaseModel):
     """
     Upper bound on generated tokens. Required by Anthropic's API; a harmless
     ceiling for providers that cap output differently or ignore it.
+
+    With extended thinking on, this covers the reasoning AND the answer, so a long
+    enough thinking pass exhausts it and leaves a billed response with no answer
+    text at all - raise it alongside enabling thinking (see
+    provider_anthropic.THINKING).
     """
 
 

@@ -26,6 +26,44 @@ try:
 except anthropic.AnthropicError:
     _default_client = None
 
+THINKING: dict[str, Any] | None = None
+"""
+Whether to ask for extended thinking, and how. None means the parameter is not sent.
+
+Stated here rather than inherited, in the same spirit as call_policy.MAX_RETRIES:
+the value equals today's behaviour, but the decision now lives in one named place.
+That matters because *omitting* `thinking` does not mean "no thinking" - the
+default is decided by the model generation. On the 5-series (claude-sonnet-5,
+claude-fable-5) an omitted parameter runs adaptive thinking; on claude-haiku-4-5
+the identical request does not think at all. One line of code therefore already
+means two different things depending on the model string, invisibly at the call
+site, and which one it means will keep changing as models ship.
+
+None is the default because no single value is valid across prices_claude.json.
+Verified against the Models API (GET /v1/models/{id}, free - see capabilities.thinking):
+
+    {"type": "adaptive"}                     rejected on opus-4-5, sonnet-4-5, haiku-4-5
+    {"type": "enabled", "budget_tokens": N}  rejected on fable-5, opus-4-8, opus-4-7, sonnet-5
+    {"type": "disabled"}                     rejected on fable-5
+    output_config={"effort": ...}            unsupported on sonnet-4-5, haiku-4-5
+
+Omitting is the only setting the whole table accepts, so pinning a value here
+would trade a silent behaviour difference for a hard 400 on part of it.
+
+Set this when the models actually targeted agree - e.g. {"type": "adaptive"} for a
+5-series-only workflow. Two costs to weigh first:
+
+  * Thinking tokens bill at output rates and Anthropic reports no separate count,
+    so they are folded indistinguishably into TokenUsageInfo.output_tokens: the
+    ledger cannot say how much of a bill was reasoning. On the 5-series
+    `thinking.display` also defaults to "omitted", so that is reasoning we pay for
+    and never receive.
+  * request.max_tokens caps thinking AND the answer together. Long enough reasoning
+    exhausts the ceiling and the response arrives with no text block at all -
+    billed, and unusable to compare() (see _answer_text). Raise max_tokens in the
+    same change, not after.
+"""
+
 
 def _answer_text(content: Any) -> str:
     """
@@ -80,6 +118,14 @@ class AnthropicProvider:
         )
 
     def _call_api(self, request: LLMRequest) -> Any:
+        # `thinking` is sent only when the policy sets one: the shapes the parameter
+        # accepts differ per model generation, so an unconditional kwarg would 400 on
+        # part of the price table (see THINKING). Read at call time, not captured at
+        # import, so the policy stays patchable.
+        thinking_kwargs: dict[str, Any] = {}
+        if THINKING is not None:
+            thinking_kwargs["thinking"] = THINKING
+
         # >>>>> Paid call. Money is spent here. <<<<<
         # Anthropic requires max_tokens and takes the system prompt as a top-level arg.
         return self._client.messages.create(
@@ -87,6 +133,7 @@ class AnthropicProvider:
             max_tokens=request.max_tokens,
             system=request.system_prompt,
             messages=[{"role": "user", "content": request.user_question}],
+            **thinking_kwargs,
         )
 
     def _parse_response(self, response: Any) -> ParsedResponse:
