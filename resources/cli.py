@@ -284,6 +284,51 @@ def _render_history_entry(log) -> None:
         typer.echo(f"{e}: {_snippet(log.error_type)}")
 
 
+def _render_group_history(group: str) -> None:
+    """
+    Print one comparison batch whole: manifest verdicts first, then every call.
+
+    Driven by read_group, not read_history: a group view must never be a
+    LIMIT-truncated subset presented as the batch, and the manifest is what says
+    how many calls there SHOULD be - without it a half-archived batch reads as a
+    small, healthy one.
+    """
+    manifest, logs = service_ask.read_group(group)
+
+    if manifest is None and not logs:
+        typer.secho(
+            f"\n>>> [cli.py] No history for group {group}.", fg=typer.colors.RED
+        )
+        raise typer.Exit()
+
+    typer.secho(f"\n==== History for group {group} ====", fg=typer.colors.BRIGHT_CYAN)
+
+    if manifest is None:
+        typer.echo(
+            f"(no manifest: this batch predates comparison manifests, so the "
+            f"{len(logs)} row(s) below cannot be checked for completeness)"
+        )
+    else:
+        typer.echo(
+            f"{manifest.target_count} target(s) expected, {len(logs)} stored  |  "
+            f"collection: {manifest.collection_status}"
+            f"  |  audit: {manifest.audit_status}"
+            f"  |  persistence: {manifest.persistence_status}"
+        )
+        if len(logs) != manifest.target_count:
+            typer.secho(
+                f"WARNING: this batch is incomplete on disk - {manifest.target_count} "
+                f"call(s) were made but only {len(logs)} row(s) survive. Do not "
+                "treat the answers below as the whole candidate set.",
+                fg=typer.colors.YELLOW,
+                bold=True,
+            )
+
+    # Target order (how compare printed them), not newest-first.
+    for log in logs:
+        _render_history_entry(log)
+
+
 @app.command()
 def history(
     limit: int = typer.Option(
@@ -295,8 +340,15 @@ def history(
 ):
     """
     Show recent questions and their LLM responses from the audit log (newest first).
+
+    With --group the whole batch is shown in target order (no limit), together
+    with its manifest verdicts and a warning when stored rows are missing.
     """
-    logs = service_ask.read_history(limit, group)
+    if group is not None:
+        _render_group_history(group)
+        return
+
+    logs = service_ask.read_history(limit)
     if not logs:
         typer.secho(
             "\n>>> [cli.py] No history yet.",
@@ -304,14 +356,8 @@ def history(
         )
         raise typer.Exit()
 
-    header = (
-        f"History (latest {len(logs)} calls)"
-        if group is None
-        else f"History for group {group}"
-    )
-
     typer.secho(
-        f"\n==== {header} ====",
+        f"\n==== History (latest {len(logs)} calls) ====",
         fg=typer.colors.BRIGHT_CYAN,
     )
 

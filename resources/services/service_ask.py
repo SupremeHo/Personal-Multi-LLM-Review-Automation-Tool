@@ -33,6 +33,8 @@ from resources.schemas import (
     AuditStatus,
     CallPolicyInfo,
     CollectionStatus,
+    ComparisonManifest,
+    ComparisonTarget,
     ErrorInfo,
     LLMCallLog,
     LLMCallResult,
@@ -265,6 +267,27 @@ def persist_log(log: LLMCallLog) -> list[PersistenceErrorInfo]:
     return errors
 
 
+def persist_group_manifest(manifest: ComparisonManifest) -> list[PersistenceErrorInfo]:
+    """
+    Archive one comparison batch's manifest (see ComparisonManifest).
+
+    Mirrors persist_log: faults come back as data and are printed the moment
+    they happen. A lost manifest does not touch the run rows already written -
+    it only costs the reader the "expected vs found" check for this batch.
+    """
+    errors = default_repository(BASE_DIR, DB_PATH).save_group(manifest)
+
+    for error in errors:
+        print_error(
+            f"Archiving manifest for group {error.run_id} to {error.sink} failed"
+            f" - {error.message}",
+            module="service_ask.py",
+            func="persist_group_manifest",
+        )
+
+    return errors
+
+
 def read_history(limit: int = 10, group_id: str | None = None) -> list[LLMCallLog]:
     """
     Read the most recent audit logs (newest first) via the default repository.
@@ -273,6 +296,17 @@ def read_history(limit: int = 10, group_id: str | None = None) -> list[LLMCallLo
     paths on each call, mirroring persist_log so tests can redirect DB_PATH.
     """
     return default_repository(BASE_DIR, DB_PATH).recent(limit, group_id)
+
+
+def read_group(group_id: str) -> tuple[ComparisonManifest | None, list[LLMCallLog]]:
+    """
+    Read one comparison batch whole: manifest plus every run row, target order.
+
+    This - not read_history with a group filter - is the read an evaluation must
+    use: no LIMIT to truncate a large batch, and the manifest to say how many
+    rows there SHOULD be. The manifest is None for pre-manifest batches.
+    """
+    return default_repository(BASE_DIR, DB_PATH).read_group(group_id)
 
 
 def ask(
@@ -341,6 +375,13 @@ class CompareResult:
     persist_errors: list[PersistenceErrorInfo] = field(default_factory=list)
     persist_attempted: bool = True
     """False when the caller passed persist=False, so 'nothing failed' is not read as 'stored'."""
+
+    manifest: ComparisonManifest | None = None
+    """
+    The batch's expected-shape record, built at batch end (None for an empty
+    batch). Persisted alongside the runs so a later reader can tell a complete
+    group from a truncated one; see ComparisonManifest.
+    """
 
     @property
     def usable_responses(self) -> list[LLMCallResult]:
@@ -416,7 +457,16 @@ class CompareResult:
             return "complete"
 
         # An error carrying no written_sinks means that run landed nowhere at all.
-        stored_nowhere = {e.run_id for e in self.persist_errors if not e.written_sinks}
+        # Counted against the RUN ids only: persist_errors also carries manifest
+        # faults (run_id = group_id, sink "*:manifest"), and letting one of those
+        # into this set would turn "every run archived, manifest lost" into a
+        # false "failed"/"partial" verdict about the runs themselves.
+        run_ids = {log.run_id for log in self.logs}
+        stored_nowhere = {
+            e.run_id
+            for e in self.persist_errors
+            if not e.written_sinks and e.run_id in run_ids
+        }
         return "failed" if len(stored_nowhere) == len(self.logs) else "partial"
 
 
@@ -588,5 +638,39 @@ def compare(
 
             if persist:
                 outcome.persist_errors.extend(persist_log(log))
+
+    # Frozen AFTER every run is collected and (when asked) archived, because the
+    # three status axes and the persist faults are only final here. The manifest
+    # is what lets a later reader tell this batch's truncated read from its
+    # whole one - runs rows alone cannot carry the denominator.
+    outcome.manifest = ComparisonManifest(
+        group_id=group_id,
+        created_at=created_at,
+        targets=[
+            ComparisonTarget(
+                provider=provider_name,
+                model=selected_model,
+                canonical_model=_canonical_target(provider_name, selected_model)[1],
+                run_id=log.run_id,
+            )
+            for (provider_name, selected_model), log in zip(
+                targets, outcome.logs, strict=True
+            )
+        ],
+        target_count=len(targets),
+        collected_count=len(outcome.logs),
+        usable_count=len(outcome.usable_responses),
+        quorum=QUORUM,
+        collection_status=outcome.collection_status,
+        audit_status=outcome.audit_status,
+        persistence_status=outcome.persistence_status,
+        persist_errors=list(outcome.persist_errors),
+    )
+
+    if persist:
+        # The manifest's own storage fault arrives after the manifest is frozen,
+        # so it can only live on the result (and the console) - never inside the
+        # manifest it failed to write.
+        outcome.persist_errors.extend(persist_group_manifest(outcome.manifest))
 
     return outcome

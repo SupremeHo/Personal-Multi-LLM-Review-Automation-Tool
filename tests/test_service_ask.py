@@ -47,6 +47,9 @@ class _UnavailableSqlite:
     def write(self, log) -> None:
         raise sqlite3.OperationalError("database is locked")
 
+    def write_group(self, manifest) -> None:
+        raise sqlite3.OperationalError("database is locked")
+
 
 @pytest.fixture
 def fake_providers(monkeypatch):
@@ -224,7 +227,12 @@ def test_compare_survives_a_storage_fault_and_records_it(monkeypatch, tmp_path):
     assert [r.provider for r in result.successes] == ["good", "slow"]
     assert result.failures == []  # a storage fault is not a failed call
     # ...and the archive fault is data, including which sink did accept the log
-    assert [e.sink for e in result.persist_errors] == ["sqlite", "sqlite"]
+    # (the batch manifest's own write failed too, reported under its own sink)
+    assert [e.sink for e in result.persist_errors] == [
+        "sqlite",
+        "sqlite",
+        "sqlite:manifest",
+    ]
     assert result.persist_errors[0].written_sinks == ["jsonl"]
     # the sink that did work still archived both logs (one file per provider)
     assert len(list((tmp_path / "_logs").rglob("*.jsonl"))) == 2
@@ -490,10 +498,17 @@ def test_compare_alias_check_leaves_distinct_and_unknown_models_alone(
     monkeypatch.setitem(registry.PRICE_PATHS, "good", _alias_price_table(tmp_path))
 
     result = svc.compare(
-        "s", "q", [("good", "m-canon"), ("good", "m-unknown")], persist=False
+        "s", "q", [("good", "m-dated"), ("good", "m-unknown")], persist=False
     )
 
     assert len(result.successes) == 2
+    # The manifest freezes the resolution, so a later reader can judge
+    # independence without the price tables as they were that day.
+    assert [t.canonical_model for t in result.manifest.targets] == [
+        "m-canon",
+        "m-unknown",
+    ]
+    assert [t.model for t in result.manifest.targets] == ["m-dated", "m-unknown"]
 
 
 def test_billing_status_is_billed_for_successes_and_paid_failures(fake_providers):
@@ -681,6 +696,75 @@ def test_compare_persists_every_call_under_one_group(monkeypatch, tmp_path, temp
     assert len({run_id for run_id, _ in rows}) == 3
     # ...all tied together by the single shared group_id
     assert {group_id for _, group_id in rows} == {result.group_id}
+
+
+def test_compare_persists_a_manifest_describing_the_whole_batch(
+    monkeypatch, tmp_path, temp_db
+):
+    # The runs table records what made it to disk; only the manifest records what
+    # SHOULD have. Without it a reader cannot tell a complete group from a
+    # truncated or half-archived one.
+    monkeypatch.setattr(
+        registry, "PROVIDERS", {"good": GoodProvider(), "fail": FailProvider()}
+    )
+    monkeypatch.setattr(svc, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(svc, "DB_PATH", temp_db)
+
+    result = svc.compare("s", "q", [("good", "m1"), ("fail", "m2"), ("good", "m3")])
+
+    manifest, logs = svc.read_group(result.group_id)
+
+    assert manifest is not None
+    assert manifest.target_count == 3
+    assert manifest.collected_count == 3
+    assert manifest.usable_count == 2
+    assert manifest.quorum == svc.QUORUM
+    assert manifest.collection_status == "partial"
+    assert manifest.audit_status == "clean"
+    assert manifest.persistence_status == "complete"
+    assert manifest.persist_errors == []
+    # target order is frozen, and each target points at its runs row
+    assert [t.run_id for t in manifest.targets] == [log.run_id for log in logs]
+    assert [log.run_id for log in logs] == [log.run_id for log in result.logs]
+
+
+def test_compare_builds_a_manifest_even_without_persistence(fake_providers):
+    # The manifest is the batch's expected shape, not a storage artifact - but it
+    # must not claim an archive status nobody attempted.
+    result = svc.compare("s", "q", [("good", "m1"), ("good", "m2")], persist=False)
+
+    assert result.manifest is not None
+    assert result.manifest.target_count == 2
+    assert result.manifest.persistence_status is None
+
+
+def test_a_lost_manifest_does_not_change_the_runs_verdict(monkeypatch, tmp_path):
+    # persistence_status is about the RUN rows; a manifest-only fault must not
+    # turn "every run archived" into a failed batch.
+    monkeypatch.setattr(registry, "PROVIDERS", {"good": GoodProvider()})
+
+    class _ManifestOnlyFault:
+        sink_name = "sqlite"
+
+        def write(self, log) -> None:
+            pass  # every run row lands fine
+
+        def write_group(self, manifest) -> None:
+            raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(
+        svc,
+        "default_repository",
+        lambda base_dir, db_path: LogRepository([_ManifestOnlyFault()]),
+    )
+
+    result = svc.compare("s", "q", [("good", "m1"), ("good", "m2")])
+
+    assert result.persistence_status == "partial"  # the archive IS incomplete...
+    assert [e.sink for e in result.persist_errors] == ["sqlite:manifest"]
+    # ...but the manifest itself recorded the runs' status from before its own
+    # write was attempted - it cannot know its own fate.
+    assert result.manifest.persistence_status == "complete"
 
 
 def test_ask_persists_to_db_and_jsonl(monkeypatch, tmp_path, temp_db):

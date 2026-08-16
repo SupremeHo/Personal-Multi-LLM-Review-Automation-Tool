@@ -25,6 +25,69 @@ def ensure_audit_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE runs ADD COLUMN group_id TEXT")
 
 
+def ensure_comparison_groups(conn: sqlite3.Connection) -> None:
+    """
+    Create the comparison_groups table if an older database predates it.
+
+    Idempotent, like ensure_audit_columns - but a whole new table rather than a
+    column, because a manifest is one row per BATCH while runs is one per call;
+    grafting expected-target data onto every run would repeat it per row and
+    still not say how many rows there should be.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS comparison_groups (
+            id INTEGER PRIMARY KEY,
+            group_id TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL,
+            schema_version INTEGER NOT NULL,
+            target_count INTEGER NOT NULL,
+            collected_count INTEGER NOT NULL,
+            usable_count INTEGER NOT NULL,
+            quorum INTEGER NOT NULL,
+            collection_status TEXT NOT NULL,
+            audit_status TEXT NOT NULL,
+            persistence_status TEXT,
+            raw_json TEXT NOT NULL
+        )
+        """
+    )
+
+
+def insert_group_manifest(conn: sqlite3.Connection, json_record: dict) -> None:
+    """
+    Insert one comparison batch's manifest row.
+
+    Mirrors insert_log_record: flat columns for querying, the full record in
+    raw_json for reconstruction. INSERT OR IGNORE because group_id is unique and
+    a manifest is written exactly once, at batch end.
+    """
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO comparison_groups (
+            group_id, created_at, schema_version,
+            target_count, collected_count, usable_count, quorum,
+            collection_status, audit_status, persistence_status,
+            raw_json
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            json_record["group_id"],
+            json_record["created_at"],
+            json_record.get("schema_version", 1),
+            json_record.get("target_count", 0),
+            json_record.get("collected_count", 0),
+            json_record.get("usable_count", 0),
+            json_record.get("quorum", 0),
+            json_record.get("collection_status"),
+            json_record.get("audit_status"),
+            json_record.get("persistence_status"),
+            json.dumps(json_record, ensure_ascii=False),
+        ),
+    )
+
+
 def insert_log_record(conn: sqlite3.Connection, json_record: dict) -> None:
     """
     Insert the LLM's log record to the SQLite Database.
