@@ -304,8 +304,16 @@ class CallPolicyInfo(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    max_parallel_calls: int
-    """Ceiling on simultaneous provider calls in one `compare`."""
+    max_parallel_calls: int | None = None
+    """
+    Ceiling on simultaneous provider calls in one `compare`.
+
+    Optional because the field arrived after live logs existed: nine archived
+    runs carry a policy with only the timeout/retry budget, and requiring it
+    here made those rows unreadable. None means "recorded before the pool cap
+    existed", not "uncapped" - inventing a number for them would falsify the
+    budget they actually ran under.
+    """
 
     connect_timeout_sec: float
     """Handshake budget; expiring here means nothing was billed."""

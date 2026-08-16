@@ -140,6 +140,39 @@ class SqliteLogWriter:
             conn.close()
 
 
+# Usage field names written by the earliest schema, keyed to today's names.
+# `prompt`/`completion` were the raw OpenAI spellings before the vocabulary went
+# provider-neutral; the single coarse `cached_tokens` predates the split cache
+# fields, and on the OpenAI-only rows that carry it, it means what
+# `cached_input_tokens` means now.
+_LEGACY_USAGE_RENAMES = {
+    "prompt_tokens": "input_tokens",
+    "completion_tokens": "output_tokens",
+    "cached_tokens": "cached_input_tokens",
+}
+
+
+def _upgrade_legacy_record(record: dict) -> dict:
+    """
+    Translate an audit record written by an older schema into today's names.
+
+    Read-time only, by design: the stored raw_json stays exactly as it was
+    written (a ledger is not amended after the fact), and this translation is
+    applied to the parsed copy on every read instead. Deliberately defensive -
+    it only renames keys it recognizes on shapes it recognizes, and a rename
+    never overwrites a value the current schema name already carries.
+    """
+    result = record.get("result")
+    usage = result.get("usage") if isinstance(result, dict) else None
+    if isinstance(usage, dict):
+        for old, new in _LEGACY_USAGE_RENAMES.items():
+            if old in usage:
+                value = usage.pop(old)
+                if new not in usage:
+                    usage[new] = value
+    return record
+
+
 class SqliteLogReader:
     """
     Read recent audit logs back from SQLite, newest first.
@@ -157,21 +190,21 @@ class SqliteLogReader:
         """
         Rebuild logs row by row, isolating the rows that no longer validate.
 
-        The archive spans schema generations (older rows predate today's field
-        names), and one unreadable row inside a list comprehension used to take
-        the WHOLE query down - history died the moment an old row entered the
-        LIMIT window. A row that fails is reported and skipped, never fatal:
-        the ledger being partially unreadable must not make it fully unreadable.
+        The archive spans schema generations, so each row is passed through
+        _upgrade_legacy_record before validation - old rows are readable, not
+        merely skipped. A row that still fails is reported and skipped, never
+        fatal: one unreadable row inside a list comprehension used to take the
+        WHOLE query down, killing history the moment an old row entered the
+        LIMIT window.
         """
         logs: list[LLMCallLog] = []
         for (raw,) in rows:
+            run_id = "?"
             try:
-                logs.append(LLMCallLog.model_validate_json(raw))
+                record = json.loads(raw)
+                run_id = record.get("run_id", "?")
+                logs.append(LLMCallLog.model_validate(_upgrade_legacy_record(record)))
             except Exception as e:  # noqa: BLE001 - one bad row must not hide the rest.
-                try:
-                    run_id = json.loads(raw).get("run_id", "?")
-                except Exception:  # noqa: BLE001 - the id is best-effort diagnostics.
-                    run_id = "?"
                 print_error(
                     f"Skipping an audit row the current schema cannot read "
                     f"(run {run_id}) - {e}",

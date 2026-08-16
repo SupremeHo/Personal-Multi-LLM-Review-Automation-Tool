@@ -265,6 +265,136 @@ def test_reader_skips_an_unreadable_row_instead_of_dying(temp_db):
     assert [log.run_id for log in whole] == ["r0", "r2"]
 
 
+def _insert_raw(db_path, run_id: str, record: dict) -> None:
+    """Plant a runs row exactly as an older schema wrote it (raw_json verbatim)."""
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO runs (
+                run_id, group_id, created_at, system_prompt, user_prompt,
+                success, raw_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                record.get("group_id"),
+                record.get("created_at", "2025-06-01T10:00:00"),
+                record.get("system_prompt", "s"),
+                record.get("user_prompt", "q"),
+                int(bool(record.get("success", False))),
+                json.dumps(record, ensure_ascii=False),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_reader_translates_the_earliest_usage_field_names(temp_db):
+    # 18 real rows in the local archive were written with OpenAI's raw spellings
+    # (prompt_tokens/completion_tokens/cached_tokens) before the vocabulary went
+    # provider-neutral. They must come back as readable logs, not be skipped -
+    # skipping is for rows nobody can translate.
+    _insert_raw(
+        temp_db,
+        "legacy-1",
+        {
+            "run_id": "legacy-1",
+            "created_at": "2025-06-01T10:00:00",
+            "system_prompt": "s",
+            "user_prompt": "q",
+            "success": True,
+            "error": None,
+            "elapsed_sec": 1.0,
+            "result": {
+                "response_id": "resp-legacy",
+                "provider": "OpenAI",
+                "model": "gpt-4o-mini",
+                "response_text": "old answer",
+                "usage": {
+                    "prompt_tokens": 40,
+                    "completion_tokens": 606,
+                    "total_tokens": 646,
+                    "cached_tokens": 3,
+                },
+            },
+        },
+    )
+
+    (log,) = SqliteLogReader(temp_db).recent(limit=5)
+
+    assert log.result.usage.input_tokens == 40
+    assert log.result.usage.output_tokens == 606
+    assert log.result.usage.total_tokens == 646
+    assert log.result.usage.cached_input_tokens == 3
+    assert log.result.response_text == "old answer"
+
+
+def test_legacy_rename_never_overwrites_a_current_field(temp_db):
+    # An intermediate-era row can carry BOTH spellings; the value the current
+    # schema name holds is the normalized one and must win.
+    _insert_raw(
+        temp_db,
+        "mixed-1",
+        {
+            "run_id": "mixed-1",
+            "created_at": "2025-06-01T10:00:00",
+            "system_prompt": "s",
+            "user_prompt": "q",
+            "success": True,
+            "result": {
+                "response_id": "resp-mixed",
+                "provider": "openai",
+                "model": "m",
+                "response_text": "t",
+                "usage": {
+                    "input_tokens": 1,
+                    "output_tokens": 1,
+                    "cached_tokens": 5,
+                    "cached_input_tokens": 7,
+                },
+            },
+        },
+    )
+
+    (log,) = SqliteLogReader(temp_db).recent(limit=5)
+
+    assert log.result.usage.cached_input_tokens == 7  # the stray legacy 5 is dropped
+
+
+def test_reader_accepts_a_policy_from_before_the_pool_cap(temp_db):
+    # Nine real rows carry a CallPolicyInfo with only the timeout/retry budget -
+    # max_parallel_calls did not exist yet. The recorded budget must survive;
+    # inventing a pool cap for them would falsify what they ran under.
+    _insert_raw(
+        temp_db,
+        "oldpolicy-1",
+        {
+            "run_id": "oldpolicy-1",
+            "created_at": "2025-07-01T10:00:00",
+            "system_prompt": "s",
+            "user_prompt": "q",
+            "success": False,
+            "error": "boom",
+            "error_type": "RuntimeError",
+            "result": None,
+            "policy": {
+                "connect_timeout_sec": 10.0,
+                "read_timeout_sec": 300.0,
+                "max_retries": 2,
+            },
+        },
+    )
+
+    (log,) = SqliteLogReader(temp_db).recent(limit=5)
+
+    assert log.policy.max_parallel_calls is None
+    assert log.policy.read_timeout_sec == 300.0
+    assert log.policy.max_retries == 2
+
+
 class _BoomGroupWriter:
     """A sqlite-shaped writer whose manifest write fails."""
 
