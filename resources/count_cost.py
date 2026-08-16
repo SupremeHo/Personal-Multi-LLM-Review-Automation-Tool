@@ -72,6 +72,27 @@ def resolve_model_entry(
     return price
 
 
+def canonical_model_name(price_table: dict, model_name: str) -> str:
+    """
+    Resolve a model name to the canonical name it is priced as.
+
+    `alias_of` entries make two spellings of one model
+    (`gpt-4o-mini-2024-07-18` → `gpt-4o-mini`) look distinct to string
+    comparison, which is how a duplicate-target check that compares raw strings
+    can be bypassed. This returns the name both spellings bill as.
+
+    Unknown models resolve to themselves rather than raising: this runs before
+    any paid call, where failing a bad model name is preflight_pricing's job -
+    here it would only stop a free duplicate check.
+    """
+    entry = price_table.get("models", {}).get(model_name)
+    if isinstance(entry, dict):
+        alias = entry.get("alias_of")
+        if isinstance(alias, str):
+            return alias
+    return model_name
+
+
 def preflight_pricing(price_path: str | Path, model_name: str) -> dict:
     """
     Validate everything that can be checked BEFORE a paid API call is made.

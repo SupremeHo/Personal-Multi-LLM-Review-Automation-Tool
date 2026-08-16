@@ -16,7 +16,13 @@ app = typer.Typer()
 def _price(log) -> str:
     """One call's cost, or why there isn't one. Never invents a zero."""
     if log.result is None:
-        return "not billed" if log.salvage is None else "billed, unpriced"
+        if log.salvage is not None:
+            return "billed, unpriced"
+        # A call that died mid-flight may still have been billed; "not billed"
+        # would be a claim nobody can back (see BillingStatus).
+        if log.billing_status == "unknown":
+            return "billing unknown"
+        return "not billed"
     if log.result.cost is None:
         return "billed, unpriced"
     return typer.style(
@@ -64,6 +70,11 @@ def _render_log(log) -> None:
                 f"[cli.py] This call was billed but nothing could be read from it "
                 f"(failed at {log.salvage.failed_stage}); it is in the audit log."
             )
+        elif log.billing_status == "unknown":
+            typer.echo(
+                "[cli.py] The call failed mid-flight; whether it was billed is "
+                "unknown - check the provider dashboard."
+            )
 
 
 def _render_compare_entry(log) -> None:
@@ -84,6 +95,11 @@ def _render_compare_entry(log) -> None:
             typer.echo(
                 f"(billed, but nothing readable came back - failed at "
                 f"{log.salvage.failed_stage})"
+            )
+        elif log.billing_status == "unknown":
+            typer.echo(
+                "(failed mid-flight; whether it was billed is unknown - check "
+                "the provider dashboard)"
             )
 
 

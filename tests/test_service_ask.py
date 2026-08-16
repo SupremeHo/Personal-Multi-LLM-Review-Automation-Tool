@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 import sqlite3
 import threading
 from datetime import timedelta
@@ -21,6 +22,7 @@ from resources.providers.provider_anthropic import AnthropicProvider
 from resources.schemas import DEFAULT_MAX_TOKENS, LLMRequest
 from resources.services import service_ask as svc
 from tests.fakes import (
+    AmbiguousBillingProvider,
     BadResultProvider,
     BadSalvageProvider,
     BarrierProvider,
@@ -30,6 +32,7 @@ from tests.fakes import (
     GoodProvider,
     PaidFailProvider,
     ParseFailProvider,
+    RejectedCallProvider,
     SlowProvider,
     TruncatedProvider,
     make_result,
@@ -195,6 +198,8 @@ def test_compare_isolates_a_worker_that_raises(monkeypatch):
     # the dead worker degrades to a failed log instead of killing the batch...
     assert [log.provider for log in result.logs] == ["boom", "good"]
     assert result.failures[0].error_type == "MemoryError"
+    # ...whose billing nobody can vouch for - the worker died outside accounting
+    assert result.logs[0].billing_status == "unknown"
     # ...and the target queued behind it still comes back
     assert [r.provider for r in result.successes] == ["good"]
 
@@ -443,6 +448,151 @@ def test_compare_rejects_duplicate_targets(fake_providers):
         svc.compare(
             "s", "q", [("good", "m1"), ("good", "m1"), ("fail", "m2")], persist=False
         )
+
+
+def _alias_price_table(tmp_path):
+    """A price table where m-dated is an alias_of m-canon, like the real ones."""
+    price = tmp_path / "prices.json"
+    price.write_text(
+        json.dumps(
+            {
+                "updated_at": "2099-01-01",
+                "source": "test",
+                "models": {
+                    "m-canon": {"input": 1.0, "output": 2.0},
+                    "m-dated": {"alias_of": "m-canon"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return price
+
+
+def test_compare_rejects_a_duplicate_hidden_behind_a_model_alias(
+    fake_providers, monkeypatch, tmp_path
+):
+    # The price tables alias dated snapshots to their canonical model
+    # (gpt-4o-mini-2024-07-18 → gpt-4o-mini), so an exact-string check let the
+    # same model in twice under two spellings - two billed calls, one opinion,
+    # reported as a quorum. The rejection must name both spellings.
+    monkeypatch.setitem(registry.PRICE_PATHS, "good", _alias_price_table(tmp_path))
+
+    with pytest.raises(ValueError, match=r"good:m-canon \+ good:m-dated"):
+        svc.compare("s", "q", [("good", "m-canon"), ("good", "m-dated")], persist=False)
+
+
+def test_compare_alias_check_leaves_distinct_and_unknown_models_alone(
+    fake_providers, monkeypatch, tmp_path
+):
+    # Models the table does not know resolve to themselves: the duplicate check
+    # must not reject (or crash on) targets that only preflight can judge.
+    monkeypatch.setitem(registry.PRICE_PATHS, "good", _alias_price_table(tmp_path))
+
+    result = svc.compare(
+        "s", "q", [("good", "m-canon"), ("good", "m-unknown")], persist=False
+    )
+
+    assert len(result.successes) == 2
+
+
+def test_billing_status_is_billed_for_successes_and_paid_failures(fake_providers):
+    # A PaidResponseError means the response was received - money moved, however
+    # the run was judged.
+    assert svc.ask("s", "q", "good", "m", persist=False).billing_status == "billed"
+    assert svc.ask("s", "q", "paidfail", "m", persist=False).billing_status == "billed"
+
+
+def test_billing_status_is_not_billed_when_the_failure_precedes_the_call(
+    fake_providers,
+):
+    # An unknown provider never reaches the API; a provider that raises outside
+    # the call boundary (anything but ProviderCallError) is pre-billing too.
+    assert svc.ask("s", "q", "nope", "m", persist=False).billing_status == "not_billed"
+    assert svc.ask("s", "q", "fail", "m", persist=False).billing_status == "not_billed"
+
+
+def test_billing_status_is_unknown_when_the_call_died_mid_flight(monkeypatch):
+    monkeypatch.setattr(
+        registry, "PROVIDERS", {"ambiguous": AmbiguousBillingProvider()}
+    )
+
+    log = svc.ask("s", "q", "ambiguous", "m", persist=False)
+
+    assert log.success is False
+    assert log.billing_status == "unknown"
+    assert log.error_type == "TimeoutError"  # the original failure, not the wrapper
+
+
+def test_billing_status_is_not_billed_on_a_pre_generation_rejection(monkeypatch):
+    monkeypatch.setattr(registry, "PROVIDERS", {"rejected": RejectedCallProvider()})
+
+    log = svc.ask("s", "q", "rejected", "m", persist=False)
+
+    assert log.billing_status == "not_billed"
+    assert log.error_type == "ValueError"
+
+
+def test_audit_status_is_unknown_when_billing_cannot_be_ruled_out(monkeypatch):
+    # Before billing_status existed this batch reported "clean": the mid-flight
+    # failure left no salvage and no uncosted result, so the ledger claimed to be
+    # settled when nobody could actually settle it.
+    monkeypatch.setattr(
+        registry,
+        "PROVIDERS",
+        {"good": GoodProvider(), "ambiguous": AmbiguousBillingProvider()},
+    )
+
+    result = svc.compare(
+        "s",
+        "q",
+        [("good", "m1"), ("good", "m2"), ("ambiguous", "m3")],
+        persist=False,
+    )
+
+    assert result.collection_status == "partial"  # the quorum is unaffected
+    assert result.audit_status == "unknown"
+
+
+def test_audit_status_degraded_outranks_unknown(monkeypatch):
+    # Known-incomplete is the stronger warning: money verifiably went unaccounted
+    # for, and that must not be diluted to "maybe" by a second failure.
+    monkeypatch.setattr(
+        registry,
+        "PROVIDERS",
+        {
+            "good": GoodProvider(),
+            "paidfail": PaidFailProvider(),
+            "ambiguous": AmbiguousBillingProvider(),
+        },
+    )
+
+    result = svc.compare(
+        "s",
+        "q",
+        [("good", "m1"), ("paidfail", "m2"), ("ambiguous", "m3")],
+        persist=False,
+    )
+
+    assert result.audit_status == "degraded"
+
+
+def test_audit_status_stays_clean_when_a_failure_verifiably_did_not_bill(monkeypatch):
+    # A 4xx rejection is proven free, so it must not drag the ledger to "unknown".
+    monkeypatch.setattr(
+        registry,
+        "PROVIDERS",
+        {"good": GoodProvider(), "rejected": RejectedCallProvider()},
+    )
+
+    result = svc.compare(
+        "s",
+        "q",
+        [("good", "m1"), ("good", "m2"), ("rejected", "m3")],
+        persist=False,
+    )
+
+    assert result.audit_status == "clean"
 
 
 def test_compare_caps_the_number_of_parallel_calls(monkeypatch):

@@ -14,12 +14,29 @@ How much of a comparison actually came back, measured in *usable answers*.
 batch still not be a comparison - one answer has nothing to be compared against.
 """
 
-AuditStatus = Literal["clean", "degraded"]
+AuditStatus = Literal["clean", "degraded", "unknown"]
 """
 Whether the money ledger for a batch is complete.
 
-`degraded` means something was billed but not fully accounted for. It says nothing
-about answer quality, and must never be read as one.
+`degraded` means something was billed but not fully accounted for. `unknown`
+means the ledger cannot be settled either way: a call failed mid-flight (e.g. a
+read timeout after the provider started answering), so whether it was billed is
+not determinable from here - see BillingStatus. Known-incomplete outranks
+undeterminable, so a batch that is both reports `degraded`.
+
+Neither says anything about answer quality, and must never be read as one.
+"""
+
+BillingStatus = Literal["not_billed", "billed", "unknown"]
+"""
+Whether one call spent money, judged at the call boundary.
+
+`billed` covers every call whose response was received, even when a later step
+failed (see PaidResponseError). `not_billed` covers failures that verifiably
+precede generation: everything before the paid call, plus requests the provider
+rejected with an HTTP 4xx. `unknown` is the honest remainder - the call failed
+in a way that cannot rule out a generated, billed response (read timeout,
+connection lost mid-response, 5xx), so "not billed" would overstate the ledger.
 """
 
 PersistenceStatus = Literal["complete", "partial", "failed"]
@@ -365,6 +382,15 @@ class LLMCallLog(BaseModel):
 
     policy: CallPolicyInfo | None = None
     """Timeout/retry budget in effect for this call; None on logs written before it existed."""
+
+    billing_status: BillingStatus | None = None
+    """
+    Whether this call spent money; None on logs written before the field existed.
+
+    Judged at the call boundary (runner.run_chat via ProviderCallError), not
+    from the outcome: a failed call may still have been billed, and `success`
+    alone cannot say so.
+    """
 
 
 class ErrorInfo(BaseModel):

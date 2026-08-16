@@ -3,6 +3,31 @@
 from resources.schemas import LLMCallResult, SalvageInfo
 
 
+class ProviderCallError(Exception):
+    """
+    Raised when the paid API call itself failed - no response object came back.
+
+    "Did that spend money?" has no single answer, and the caller cannot re-derive
+    it from the original exception without knowing every SDK's failure shapes.
+    So the call boundary (runner.run_chat), the one place that can see where the
+    failure sits relative to billing, judges it and sends the verdict along:
+
+    * ``billing_possible=False`` - the failure verifiably precedes generation
+      (the connection was never made, or the provider rejected the request with
+      an HTTP 4xx), so nothing was billed.
+    * ``billing_possible=True``  - the failure cannot rule out a generated
+      response (read timeout, connection lost mid-response, HTTP 5xx), so the
+      audit log must say "unknown" rather than claim "not billed".
+    """
+
+    def __init__(self, original: Exception, *, billing_possible: bool):
+        # The underlying failure raised by the SDK call.
+        self.original = original
+        # Whether a response may have been generated (and billed) despite it.
+        self.billing_possible = billing_possible
+        super().__init__(str(original))
+
+
 class PaidResponseError(Exception):
     """
     Raised when a paid API call already succeeded (a response was billed and received)

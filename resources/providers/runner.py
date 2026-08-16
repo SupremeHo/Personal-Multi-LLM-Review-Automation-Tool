@@ -20,7 +20,7 @@ from typing import Any
 
 from resources.count_cost import calculate_token_cost, preflight_pricing
 from resources.diagnostics import print_error
-from resources.providers.response_error import PaidResponseError
+from resources.providers.response_error import PaidResponseError, ProviderCallError
 from resources.schemas import (
     CostInfo,
     LLMCallResult,
@@ -143,6 +143,44 @@ def _salvage(
         return SalvageInfo(**known)
 
 
+def _billing_possible(error: Exception) -> bool:
+    """
+    Whether a failed paid call may still have been billed.
+
+    Deliberately conservative: only two failure shapes can *prove* no money was
+    spent, and everything else defaults to True ("unknown" in the audit log).
+    Duck-typed rather than matched against each SDK's exception classes, so it
+    stays provider-neutral - the same reason SalvageInfo reads generic fields.
+
+    * An HTTP error response means the provider answered with a verdict. 4xx is
+      a pre-generation rejection (bad request, auth, rate limit) - not billed.
+      5xx means the server broke at an unknowable point, possibly after
+      generating - billing stays possible.
+    * A failure to even reach the server cannot have billed anything. The SDKs
+      wrap httpx's errors, so the cause chain is walked for the connect-phase
+      types; a ReadTimeout, by contrast, fires while the provider is already
+      generating, which is exactly the case this classifier exists for.
+    """
+    # openai/anthropic APIStatusError carry `status_code`; google.genai's
+    # APIError carries `code`. Checked in this order so an exception with both
+    # is read as the HTTP-shaped one.
+    status = getattr(error, "status_code", None)
+    if status is None:
+        status = getattr(error, "code", None)
+    if isinstance(status, int):
+        return status >= 500
+
+    seen: set[int] = set()
+    cause: BaseException | None = error
+    while cause is not None and id(cause) not in seen:
+        seen.add(id(cause))
+        if type(cause).__name__ in {"ConnectTimeout", "ConnectError"}:
+            return False
+        cause = cause.__cause__ or cause.__context__
+
+    return True
+
+
 def run_chat(
     *,
     request: LLMRequest,
@@ -165,6 +203,10 @@ def run_chat(
 
     Raises:
       RuntimeError: The client is unavailable (pre-billing).
+      ProviderCallError: The paid call itself failed. Carries the original SDK
+        exception plus `billing_possible` - whether a response may have been
+        generated (and billed) despite the failure - judged here because only
+        this boundary can see where the failure sits relative to billing.
       PaidResponseError: A response was billed but a later step failed - parsing,
         cost calculation, or result validation. It carries the assembled result
         when there is one and SalvageInfo either way, so the paid response is
@@ -185,7 +227,14 @@ def run_chat(
     price_table = preflight_pricing(price_path, request.selected_model)
 
     # >>>>> Paid call. Money is spent here. <<<<<
-    raw_response = call_api(request)
+    # A failure inside this call is the one place where "was it billed?" has no
+    # certain answer - a read timeout fires while the provider is generating.
+    # Wrap it with the verdict so the audit log can say "unknown" instead of
+    # mislabeling it "not billed" (which `clean` would then overstate).
+    try:
+        raw_response = call_api(request)
+    except Exception as e:  # noqa: BLE001 - every call failure must carry a billing verdict.
+        raise ProviderCallError(e, billing_possible=_billing_possible(e)) from e
 
     # >>>>> Everything below runs AFTER billing; a failure here must not throw away the paid response. <<<<<
     # Each step is a separate stage of one post-billing boundary. Parsing and result

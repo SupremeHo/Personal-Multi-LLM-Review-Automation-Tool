@@ -6,7 +6,7 @@ import types
 
 import pytest
 
-from resources.providers.response_error import PaidResponseError
+from resources.providers.response_error import PaidResponseError, ProviderCallError
 from resources.providers.runner import ParsedResponse, run_chat
 from resources.schemas import LLMRequest, TokenUsageInfo
 from tests.fakes import write_price_table
@@ -190,6 +190,71 @@ def test_run_chat_salvage_never_masks_the_billed_failure(tmp_path):
     assert exc.value.salvage.failed_stage == "parse"
     assert exc.value.salvage.provider == "x"
     assert exc.value.salvage.raw_usage is None
+
+
+def _run_chat_with_failing_call(tmp_path, call_api):
+    """Drive run_chat into a paid-call failure and hand back the wrapper."""
+    price = write_price_table(tmp_path / "p.json", "test-model")
+    with pytest.raises(ProviderCallError) as exc:
+        run_chat(
+            request=_request(),
+            provider_name="x",
+            client=object(),
+            price_path=price,
+            call_api=call_api,
+            parse_response=lambda raw: _parsed(),
+        )
+    return exc.value
+
+
+@pytest.mark.parametrize("attr", ["status_code", "code"])
+def test_call_failure_with_a_4xx_verdict_is_not_billed(tmp_path, attr):
+    # An HTTP 4xx is the provider rejecting the request before generation, so the
+    # boundary can prove nothing was billed. `status_code` is the openai/anthropic
+    # spelling, `code` the google.genai one.
+    def call_api(request):
+        err = RuntimeError("rejected")
+        setattr(err, attr, 429)
+        raise err
+
+    wrapped = _run_chat_with_failing_call(tmp_path, call_api)
+
+    assert wrapped.billing_possible is False
+    assert isinstance(wrapped.original, RuntimeError)
+
+
+def test_call_failure_with_a_5xx_verdict_keeps_billing_possible(tmp_path):
+    # A server error breaks at an unknowable point - possibly after generating.
+    def call_api(request):
+        err = RuntimeError("server broke")
+        err.status_code = 500
+        raise err
+
+    assert _run_chat_with_failing_call(tmp_path, call_api).billing_possible is True
+
+
+def test_connect_phase_failure_is_not_billed(tmp_path):
+    # The SDKs wrap httpx's connect errors; a call that never reached the server
+    # cannot have billed anything, and the cause chain is where that shows.
+    connect_error = type("ConnectError", (Exception,), {})
+
+    def call_api(request):
+        try:
+            raise connect_error("no route to host")
+        except connect_error as inner:
+            raise RuntimeError("Connection error.") from inner
+
+    assert _run_chat_with_failing_call(tmp_path, call_api).billing_possible is False
+
+
+def test_an_unclassifiable_call_failure_defaults_to_billing_possible(tmp_path):
+    # A read timeout fires while the provider is already generating, and so does
+    # anything else this cannot classify: the default must be the honest "maybe",
+    # never a "not billed" nobody can back.
+    def call_api(request):
+        raise RuntimeError("read timed out")
+
+    assert _run_chat_with_failing_call(tmp_path, call_api).billing_possible is True
 
 
 def test_run_chat_result_validation_failure_preserves_billed_response(tmp_path):

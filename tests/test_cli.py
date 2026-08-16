@@ -12,6 +12,7 @@ from resources.count_cost import preflight_pricing
 from resources.providers import provider_openai, registry
 from resources.services import service_ask as svc
 from tests.fakes import (
+    AmbiguousBillingProvider,
     FailProvider,
     GoodProvider,
     PaidFailProvider,
@@ -32,6 +33,7 @@ def cli_env(monkeypatch, tmp_path, temp_db):
             "fail": FailProvider(),
             "paidfail": PaidFailProvider(),
             "truncated": TruncatedProvider(),
+            "ambiguous": AmbiguousBillingProvider(),
         },
     )
     monkeypatch.setattr(svc, "BASE_DIR", tmp_path)
@@ -108,6 +110,19 @@ def test_compare_warns_when_the_batch_is_not_a_comparison(cli_env):
     assert result.exit_code == 0
     assert "collection: insufficient" in result.stdout
     assert "Not a comparison" in result.stdout
+
+
+def test_compare_says_when_a_failed_calls_billing_is_unknown(cli_env):
+    # A mid-flight failure (read timeout while the provider was generating) used
+    # to render like any unbilled failure while the batch claimed "audit: clean".
+    # The reader has money possibly on the line; the output must say so.
+    result = runner.invoke(
+        cli.app, ["compare", "s", "q", "-t", "good:m1", "-t", "ambiguous:m2"]
+    )
+
+    assert result.exit_code == 0
+    assert "audit: unknown" in result.stdout
+    assert "whether it was billed is unknown" in result.stdout
 
 
 def test_compare_rejects_duplicate_targets_without_calling_anything(cli_env):
