@@ -50,6 +50,8 @@ pip install -r requirements.txt
 
 The tool reads three keys—`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`. All of them are optional: a missing key simply disables that one provider instead of crashing the tool.
 
+Anthropic also accepts `ANTHROPIC_AUTH_TOKEN` in place of `ANTHROPIC_API_KEY`—the SDK uses whichever is set, so either one on its own configures the provider.
+
 There are two supported ways to supply them. **OS environment variables are read first and always win**; `.env` only fills in what they leave unset.
 
 **Recommended—OS environment variables.** They live outside the project directory, so they cannot be committed, zipped, or shared along with the repo:

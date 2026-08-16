@@ -17,14 +17,39 @@ from resources.schemas import LLMCallResult, LLMRequest, TokenUsageInfo
 PRICE_DIR = Path(__file__).resolve().parent.parent.parent / "config" / "prices"
 PRICE_PATH_ANTHROPIC = PRICE_DIR / "prices_claude.json"
 
-# Constructed at import time; set to None if the key/init fails so a missing key
-# disables this provider instead of crashing the whole tool. Timeout and retry
-# budget are stated explicitly (see call_policy) rather than left to the SDK's
-# 10-minute default, which would hold a whole comparison hostage.
-try:
-    _default_client = Anthropic(timeout=HTTP_TIMEOUT, max_retries=MAX_RETRIES)
-except anthropic.AnthropicError:
-    _default_client = None
+
+def _build_default_client() -> Anthropic | None:
+    """
+    Build the import-time client, or None when no credential resolved.
+
+    Unlike OpenAI() and genai.Client(), Anthropic() does NOT raise on a missing
+    key - it returns a keyless client that sends no auth header and fails only at
+    call time with a 401, i.e. after money would have been spent. Catching the
+    constructor is therefore not enough here: the credential has to be checked
+    explicitly so a missing key disables this provider instead of arriving as a
+    401 on the paid path.
+
+    The check asks the client what it *resolved* rather than reading an
+    environment variable directly, because the SDK honours ANTHROPIC_API_KEY and
+    ANTHROPIC_AUTH_TOKEN both - duplicating that list here is how the two drift
+    apart.
+
+    Timeout and retry budget are stated explicitly (see call_policy) rather than
+    left to the SDK's 10-minute default, which would hold a whole comparison
+    hostage.
+    """
+    try:
+        client = Anthropic(timeout=HTTP_TIMEOUT, max_retries=MAX_RETRIES)
+    except anthropic.AnthropicError:
+        return None
+
+    return client if client.api_key or client.auth_token else None
+
+
+# Decided at import time so a missing key disables this provider instead of
+# crashing the whole tool. Kept in a function so the decision is testable without
+# reloading the module.
+_default_client = _build_default_client()
 
 THINKING: dict[str, Any] | None = None
 """

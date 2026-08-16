@@ -144,6 +144,30 @@ def test_google_sends_the_configured_thinking_config(tmp_path, monkeypatch):
     assert calls[0]["config"].thinking_config == wanted
 
 
+def test_anthropic_client_is_disabled_when_no_credential_resolves(monkeypatch):
+    # Regression: Anthropic() is the one SDK of the three that does NOT raise on a
+    # missing key - it hands back a keyless client whose 401 arrives at call time,
+    # on the paid path. The try/except that disables OpenAI and Google therefore
+    # never fired here, so a missing key disabled two providers out of three.
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+
+    assert provider_anthropic._build_default_client() is None
+
+
+def test_anthropic_client_accepts_either_credential_variable(monkeypatch):
+    # The check reads what the client resolved, not one variable name: the SDK
+    # honours ANTHROPIC_AUTH_TOKEN as well, and testing only the api_key path
+    # would let a token-only setup be disabled by mistake.
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "token-from-env")
+    assert provider_anthropic._build_default_client() is not None
+
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-from-env")
+    assert provider_anthropic._build_default_client() is not None
+
+
 def test_providers_satisfy_contract():
     assert isinstance(OpenAIProvider(client=object()), ChatProvider)
     assert isinstance(AnthropicProvider(client=object()), ChatProvider)

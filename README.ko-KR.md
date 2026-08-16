@@ -50,6 +50,8 @@ pip install -r requirements.txt
 
 이 도구는 `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` 세 개의 키를 읽습니다. 모든 키는 선택 사항이며, 키가 없으면 도구 전체가 멈추는 대신 해당 프로바이더 하나만 비활성화됩니다.
 
+Anthropic은 `ANTHROPIC_API_KEY` 대신 `ANTHROPIC_AUTH_TOKEN`도 받습니다. SDK가 설정된 쪽을 사용하므로 둘 중 하나만 있어도 프로바이더가 활성화됩니다.
+
 키를 넣는 방법은 두 가지이며, **OS 환경 변수를 먼저 읽고 항상 우선합니다.** `.env`는 OS 환경 변수가 채우지 않은 값만 보완합니다.
 
 **권장 — OS 환경 변수.** 프로젝트 디렉터리 바깥에 있으므로 저장소와 함께 커밋·압축·공유될 수 없습니다:
