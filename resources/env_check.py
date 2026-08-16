@@ -3,18 +3,25 @@
 import os
 import sys
 
-# Required environment variables per provider. Driven by one table so adding a
-# provider is a single entry instead of three more parallel blocks.
-REQUIRED_VARS = {
+# Credentials each provider accepts, in the order they are reported. Driven by one
+# table so adding a provider is a single entry instead of three more parallel
+# blocks. A provider is configured when ANY ONE of its variables is set - Anthropic
+# lists two because its SDK honours either (see provider_anthropic._build_default_client).
+CREDENTIAL_VARS = {
     "OpenAI": ["OPENAI_API_KEY"],
-    "Anthropic": ["ANTHROPIC_API_KEY"],
+    "Anthropic": ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"],
     "Google": ["GEMINI_API_KEY"],
 }
 
 
 def missing_environment_variables() -> dict[str, list[str]]:
     """
-    Which required variables each provider is missing (an empty list = all set).
+    Which credentials each provider is missing (an empty list = configured).
+
+    One variable is enough, so the answer is all-or-nothing per provider: the list
+    is either empty or names every variable that would have satisfied it. Calling
+    ANTHROPIC_API_KEY missing while ANTHROPIC_AUTH_TOKEN is set would report a
+    working provider as broken, since the client is built from either one.
 
     Kept apart from check_environment_variables() so the check can be exercised
     without driving that function's interactive prompt.
@@ -24,8 +31,8 @@ def missing_environment_variables() -> dict[str, list[str]]:
     environment the providers never saw, since their clients are built first.
     """
     return {
-        provider: [env_var for env_var in keys if not os.getenv(env_var)]
-        for provider, keys in REQUIRED_VARS.items()
+        provider: [] if any(os.getenv(var) for var in variables) else list(variables)
+        for provider, variables in CREDENTIAL_VARS.items()
     }
 
 
@@ -46,9 +53,11 @@ def check_environment_variables():
     # failing when its key is missing), so warn about missing keys instead of exiting.
     for provider, missing_vars in missing_by_provider.items():
         if missing_vars:
+            # " or ", not ", ": one of them is enough, and a comma-separated list
+            # reads as a set of variables that all have to be set.
             sys.stderr.write(
                 "Warning: Environment Variable Missing: "
-                + ", ".join(missing_vars)
+                + " or ".join(missing_vars)
                 + "\n"
             )
             # Name both sources: the OS environment is the recommended one and
@@ -71,8 +80,8 @@ def check_environment_variables():
             ).lower()
 
             if check_values == "y":
-                for keys in REQUIRED_VARS.values():
-                    show_key_values_4_chars(keys)
+                for variables in CREDENTIAL_VARS.values():
+                    show_key_values_4_chars(variables)
                 break
             elif check_values == "n":
                 print("\nSkipping validation for environment variables...\n")
@@ -89,11 +98,11 @@ def check_environment_variables():
             sys.exit("Error Message: Program interrupted by user. Exit the program.")
 
 
-def show_key_values_4_chars(required_vars):
+def show_key_values_4_chars(variables):
     """
-    Show the last 4 characters of each required environment variable.
+    Show the last 4 characters of each of a provider's credential variables.
     """
-    for env_var in required_vars:
+    for env_var in variables:
         key_value = os.getenv(env_var)
         key_value_4_chars = key_value[-4:] if key_value else "(not set)"
         print(f"\n{env_var}: ...{key_value_4_chars}")

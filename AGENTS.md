@@ -95,7 +95,7 @@ These conventions encode hard-won billing/safety decisions; don't undo them casu
 
 ## Environment
 
-Each `provider_*.py` constructs its SDK client at import time (`OpenAI()`, `Anthropic()`) and sets `_default_client` to `None` if the key/init fails, rather than crashing — so a missing key disables one provider instead of the whole tool. `env_check.py` mirrors this: missing keys are **warnings**, not fatal. The three keys are `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`.
+Each `provider_*.py` constructs its SDK client at import time (`OpenAI()`, `Anthropic()`) and sets `_default_client` to `None` if the key/init fails, rather than crashing — so a missing key disables one provider instead of the whole tool. `env_check.py` mirrors this: missing keys are **warnings**, not fatal. The three keys are `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` — plus `ANTHROPIC_AUTH_TOKEN`, which satisfies Anthropic on its own because the client accepts either. `env_check.CREDENTIAL_VARS` therefore lists the variables a provider *accepts* and treats **any one** of them as enough, rather than requiring every entry; it reports either an empty list or every name that would have worked, so a token-only setup is not warned about.
 
 Keys come from the **OS environment first**, with `.env` (see `.env.example`) as a fallback for whatever it leaves unset — `load_dotenv(..., override=False)`, so an OS variable always wins.
 
