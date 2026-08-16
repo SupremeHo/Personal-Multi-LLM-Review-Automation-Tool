@@ -50,6 +50,8 @@ pip install -r requirements.txt
 
 The tool reads three keys—`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`. All of them are optional: a missing key simply disables that one provider instead of crashing the tool.
 
+Anthropic also accepts `ANTHROPIC_AUTH_TOKEN` in place of `ANTHROPIC_API_KEY`—the SDK uses whichever is set, so either one on its own configures the provider.
+
 There are two supported ways to supply them. **OS environment variables are read first and always win**; `.env` only fills in what they leave unset.
 
 **Recommended—OS environment variables.** They live outside the project directory, so they cannot be committed, zipped, or shared along with the repo:
@@ -129,7 +131,7 @@ Run from the **project root** as a module (not `cd resources`). `ask` and `compa
 
 ```bash
 python -m resources.cli ask "<system_prompt>" "<user_question>"
-# defaults: --provider openai --model gpt-4o-mini
+# defaults: --provider openai --model gpt-5.6-luna
 
 python -m resources.cli ask "<system_prompt>" "<user_question>" \
   --provider anthropic --model claude-haiku-4-5
@@ -139,7 +141,7 @@ python -m resources.cli ask "<system_prompt>" "<user_question>" \
 
 ```bash
 python -m resources.cli compare "<system_prompt>" "<user_question>" \
-  -t openai:gpt-4o-mini -t anthropic:claude-haiku-4-5
+  -t openai:gpt-5.6-terra -t anthropic:claude-haiku-4-5
 ```
 
 **Other commands:**

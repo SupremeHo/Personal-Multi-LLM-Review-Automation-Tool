@@ -32,6 +32,38 @@ try:
 except ValueError:
     _default_client = None
 
+THINKING_CONFIG: types.ThinkingConfig | None = None
+"""
+How much reasoning to ask Gemini for. None means the config is not sent.
+
+Stated here rather than inherited, for the same reason as
+provider_anthropic.THINKING: omitting it does not mean "no thinking", it means
+"whatever this model does by default", and the defaults differ per model.
+Every model in prices_gemini.json reports thinking support, and most default to
+ON - gemini-3-flash-preview high, gemini-3.6-flash medium, gemini-3.5-flash-lite
+minimal, gemini-2.5-pro and 2.5-flash enabled; only gemini-2.5-flash-lite is off.
+So the tool is already paying for reasoning on nearly every Gemini target.
+
+None is the default because the knobs are not uniform either: `thinking_level`
+(MINIMAL/LOW/MEDIUM/HIGH) is the current control, `thinking_budget` the older
+token-count one, and which a model honours varies. Pinning one here would trade
+a silent default for an error on part of the table.
+
+Two things to weigh before setting it:
+
+  * Thinking tokens bill at the output rate and are NOT included in
+    candidates_token_count - see _parse_response, which adds them back in.
+  * request.max_tokens caps thinking AND the answer together. Measured on
+    gemini-2.5-flash at the then-default 4096: a puzzle question spent 3928
+    tokens thinking, left 164 for the answer, and came back
+    finish_reason=MAX_TOKENS with the answer cut off. The default is now
+    schemas.DEFAULT_MAX_TOKENS (16,384), but raising the level without raising
+    the ceiling still buys truncated answers at a higher price.
+
+`include_thoughts=True` is safe for the answer body - response.text skips parts
+flagged `thought` - but the summaries it returns are billed like the rest.
+"""
+
 
 class GoogleProvider:
     """Google Gemini implementation of the ChatProvider contract (see base_provider)."""
@@ -59,12 +91,15 @@ class GoogleProvider:
     def _call_api(self, request: LLMRequest) -> Any:
         # >>>>> Paid call. Money is spent here. <<<<<
         # Gemini takes the system prompt inside GenerateContentConfig, not as a message.
+        # thinking_config stays None unless the policy sets one (see THINKING_CONFIG);
+        # read at call time, not captured at import, so it stays patchable.
         return self._client.models.generate_content(
             model=request.selected_model,
             contents=request.user_question,
             config=types.GenerateContentConfig(
                 system_instruction=request.system_prompt,
                 max_output_tokens=request.max_tokens,
+                thinking_config=THINKING_CONFIG,
             ),
         )
 
@@ -74,10 +109,24 @@ class GoogleProvider:
 
         cached_tokens = usage.cached_content_token_count
 
+        # Thinking tokens are billed at the output rate but live OUTSIDE
+        # candidates_token_count: the API defines total_token_count as the sum of
+        # prompt + candidates + tool_use_prompt + thoughts, and Google's pricing
+        # docs say "response pricing is the sum of output tokens and thinking
+        # tokens". Reading candidates_token_count alone therefore billed for the
+        # answer and nothing for the reasoning that produced it - measured at
+        # ~23x under on gemini-2.5-flash, which thinks by default. Adding them
+        # here is what keeps TokenUsageInfo.output_tokens meaning the same thing
+        # on every provider, and fixes cost by construction (runner.run_chat
+        # bills from output_tokens).
+        thoughts = usage.thoughts_token_count or 0
+        billable_output = (usage.candidates_token_count or 0) + thoughts
+
         token_usage = TokenUsageInfo(
             input_tokens=usage.prompt_token_count,
-            output_tokens=usage.candidates_token_count,
-            total_tokens=usage.total_token_count,
+            output_tokens=billable_output,
+            total_tokens=usage.total_token_count,  # already counts thoughts
+            reasoning_tokens=thoughts,
             cached_input_tokens=cached_tokens,
         )
 
@@ -86,7 +135,12 @@ class GoogleProvider:
         finish_reason = candidate.finish_reason
         return ParsedResponse(
             model=response.model_version,
-            response_text=response.text,
+            # `.text` is None when no text part survives - the thinking-exhausted
+            # case, where max_tokens ran out before the answer began. That is a
+            # billed response, so it must not fail LLMCallResult's `str` validation
+            # and lose its cost record; an empty body is left to the service layer,
+            # which already treats it as unusable (mirrors _answer_text on Anthropic).
+            response_text=response.text or "",
             finish_reason=finish_reason.value if finish_reason else None,
             raw_response_id=getattr(response, "response_id", None),
             usage=token_usage,

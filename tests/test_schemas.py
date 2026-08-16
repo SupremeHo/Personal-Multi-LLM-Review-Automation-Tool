@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from resources.schemas import (
+    DEFAULT_MAX_TOKENS,
     CostInfo,
     ErrorInfo,
     LLMCallLog,
@@ -54,7 +55,7 @@ def test_llm_request_requires_response_id_and_defaults_max_tokens():
         selected_model="m",
     )
     assert req.response_id == "rid"
-    assert req.max_tokens == 4096
+    assert req.max_tokens == DEFAULT_MAX_TOKENS
 
     with pytest.raises(ValidationError):
         LLMRequest(system_prompt="s", user_question="q", selected_model="m")

@@ -28,6 +28,7 @@ from resources.log_repository import default_repository
 from resources.providers.registry import get_provider
 from resources.providers.response_error import PaidResponseError
 from resources.schemas import (
+    DEFAULT_MAX_TOKENS,
     AuditStatus,
     CallPolicyInfo,
     CollectionStatus,
@@ -42,6 +43,27 @@ from resources.schemas import (
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DB_PATH = BASE_DIR / "_db" / "llm_responses.db"
+
+TRUNCATED_FINISH_REASONS = frozenset({"length", "max_tokens"})
+"""
+The finish reasons that mean "the model was cut off mid-answer".
+
+One entry per provider's spelling, compared lowercased because Gemini shouts its
+enum: OpenAI says `length`, Anthropic `max_tokens`, Gemini `MAX_TOKENS`.
+
+This matters because reasoning shares the max_tokens ceiling with the answer, so
+truncation stopped being an edge case: measured on gemini-2.5-flash at the
+then-default 4096, a puzzle question spent 3928 tokens thinking and had the answer
+cut off with 164 left. The body is non-empty, so without this the cut-off text
+counted as a whole answer. The ceiling is now DEFAULT_MAX_TOKENS (16,384), which
+buys room but does not remove the coupling - the CLI's default model reasons too.
+"""
+
+
+def is_truncated(result: LLMCallResult) -> bool:
+    """Whether the model ran out of room before it finished answering."""
+    reason = result.finish_reason
+    return reason is not None and reason.lower() in TRUNCATED_FINISH_REASONS
 
 
 def _current_policy() -> CallPolicyInfo:
@@ -59,7 +81,7 @@ def make_request(
     user_question: str,
     selected_model: str,
     *,
-    max_tokens: int = 4096,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
 ) -> LLMRequest:
     """Build an LLMRequest with a freshly minted response_id (service owns identity)."""
     return LLMRequest(
@@ -221,7 +243,7 @@ def ask(
     provider_name: str,
     selected_model: str,
     *,
-    max_tokens: int = 4096,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
     persist: bool = True,
 ) -> LLMCallLog:
     """
@@ -297,11 +319,19 @@ class CompareResult:
           an empty body - is not counted, however the call itself was judged. An
           empty answer padding the quorum is exactly the false confidence this tool
           exists to prevent.
+        * A response the model was cut off mid-way through (see is_truncated) is
+          not counted either, for the same reason one step further on: it reads as
+          a whole answer and is not one. Its conclusion may be missing or, worse,
+          half-formed. This is a vote, not the answer itself - the result stays in
+          `logs`, keeps its cost, is persisted, and is still printed; it just does
+          not get to claim the batch was cross-checked.
         """
         return [
             log.result
             for log in self.logs
-            if log.result is not None and log.result.response_text.strip()
+            if log.result is not None
+            and log.result.response_text.strip()
+            and not is_truncated(log.result)
         ]
 
     @property
@@ -351,7 +381,7 @@ def compare(
     user_question: str,
     targets: list[tuple[str, str]],
     *,
-    max_tokens: int = 4096,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
     persist: bool = True,
 ) -> CompareResult:
     """

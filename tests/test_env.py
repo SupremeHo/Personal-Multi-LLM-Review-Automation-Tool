@@ -22,7 +22,15 @@ from resources.env_check import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-API_KEYS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY")
+# Every variable that can configure a provider, so "a fresh machine" really is one:
+# leaving ANTHROPIC_AUTH_TOKEN behind would let a developer's own environment
+# satisfy Anthropic and quietly pass the missing-key cases.
+API_KEYS = (
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "GEMINI_API_KEY",
+)
 
 
 def _clear_api_keys(monkeypatch):
@@ -115,6 +123,27 @@ def test_missing_environment_variables_reads_os_environ(monkeypatch):
     assert missing["OpenAI"] == ["OPENAI_API_KEY"]
     assert missing["Anthropic"] == []
     assert missing["Google"] == ["GEMINI_API_KEY"]
+
+
+def test_anthropic_is_configured_by_either_of_its_two_variables(monkeypatch):
+    # The provider builds its client from ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN
+    # (see provider_anthropic._build_default_client), so check-env used to warn that
+    # Anthropic "stays disabled" on a token-only setup where it in fact worked.
+    _clear_api_keys(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "token-from-env")
+
+    assert missing_environment_variables()["Anthropic"] == []
+
+
+def test_check_env_offers_the_anthropic_variables_as_a_choice(monkeypatch, capsys):
+    # Both names have to appear when neither is set - naming only the api key hides
+    # the alternative - but joined so that setting one is clearly enough.
+    _clear_api_keys(monkeypatch)
+    monkeypatch.setattr("builtins.input", lambda _prompt: "n")
+
+    check_environment_variables()
+
+    assert "ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN" in capsys.readouterr().err
 
 
 def test_missing_environment_variables_treats_a_blank_value_as_missing(monkeypatch):

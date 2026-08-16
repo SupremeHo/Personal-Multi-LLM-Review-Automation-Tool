@@ -25,6 +25,28 @@ about answer quality, and must never be read as one.
 PersistenceStatus = Literal["complete", "partial", "failed"]
 """Whether the audit trail for a batch reached storage. Independent of the two above."""
 
+DEFAULT_MAX_TOKENS = 16384
+"""
+The default output ceiling, in one place because it is written in four (see
+`LLMRequest.max_tokens` plus the three `service_ask` signatures). The CLI has no
+`--max-tokens` flag, so the service defaults are what actually apply - changing
+only the schema would do nothing.
+
+16,384 is the largest value every priced model accepts. Measured against the
+`max_completion_tokens` ceiling each provider reports: the `gpt-5.6` family caps
+at 128,000 and `gpt-4o`/`gpt-4o-mini` at 16,384 (OpenAI *rejects* rather than
+clamps, pre-generation, so an over-large value costs nothing but breaks the
+target); Anthropic's floor across `prices_claude.json` is 64,000 and every priced
+Gemini model allows 65,536.
+
+Raised from 4,096 when the CLI default moved to a reasoning model. This is a
+ceiling, not a target, so a larger number bills nothing extra by itself - but
+reasoning shares it with the answer, and 4,096 was small enough to be exhausted
+mid-answer (measured on `gemini-2.5-flash`: 3,928 tokens spent thinking, 164 left,
+`MAX_TOKENS`). A per-model `max_output` column with a clamp in `preflight_pricing`
+is the shape to reach for if one flat value ever stops being enough.
+"""
+
 
 class TokenUsageInfo(BaseModel):
     """
@@ -42,7 +64,17 @@ class TokenUsageInfo(BaseModel):
     """Number of tokens in the prompt."""
 
     output_tokens: int
-    """Number of tokens in the generated completion."""
+    """
+    Everything billed at the provider's output rate.
+
+    Normalized by the providers so this means the same thing everywhere, because
+    the vendors disagree: OpenAI's `completion_tokens` already includes reasoning,
+    while Gemini's `candidates_token_count` excludes `thoughts_token_count` and
+    counts it as a separate addend of the total. Reading the raw field on Gemini
+    therefore undercharges the whole reasoning pass - measured at ~23x on
+    gemini-2.5-flash, which thinks by default. Reconciling that is the provider
+    parser's job, not the caller's; see `reasoning_tokens` for the breakdown.
+    """
 
     total_tokens: int | None = None
     """
@@ -50,6 +82,20 @@ class TokenUsageInfo(BaseModel):
 
     Optional: some providers (e.g. Anthropic) do not return a total, so the
     service/storage layer may derive it from input + output when it is None.
+    """
+
+    reasoning_tokens: int | None = None
+    """
+    How much of `output_tokens` was spent reasoning, when the provider says.
+
+    A single neutral field rather than one name per provider (unlike the cache
+    counts below): "tokens spent thinking, billed at the output rate" means the
+    same thing on OpenAI and Gemini. The only difference is whether the vendor's
+    own output count already includes them, and the parsers absorb that.
+
+    None means the provider does not report it, NOT that no reasoning happened -
+    Anthropic bills thinking as output tokens without ever breaking out a count,
+    so on that provider the share is unknowable (see provider_anthropic.THINKING).
     """
 
     # --- Cache accounting (provider-specific semantics, preserved separately) ---
@@ -122,10 +168,16 @@ class LLMRequest(BaseModel):
     user_question: str
     selected_model: str
 
-    max_tokens: int = 4096
+    max_tokens: int = DEFAULT_MAX_TOKENS
     """
     Upper bound on generated tokens. Required by Anthropic's API; a harmless
     ceiling for providers that cap output differently or ignore it.
+
+    With extended thinking on, this covers the reasoning AND the answer, so a long
+    enough thinking pass exhausts it and leaves a billed response with no answer
+    text at all - raise it alongside enabling thinking (see
+    provider_anthropic.THINKING). The CLI's default model reasons out of the box,
+    so this is the ordinary case rather than an opt-in one.
     """
 
 

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import pytest
+from google.genai import types
 
+from resources.providers import provider_anthropic, provider_google, provider_openai
 from resources.providers.base_provider import ChatProvider
 from resources.providers.provider_anthropic import AnthropicProvider
 from resources.providers.provider_google import GoogleProvider
@@ -60,6 +62,112 @@ def test_every_provider_applies_the_requested_output_ceiling(tmp_path):
     assert google_calls[0]["config"].max_output_tokens == 123
 
 
+def test_anthropic_omits_the_thinking_parameter_by_default(tmp_path):
+    # The parameter's accepted shapes differ per model generation, so there is no
+    # value that works for every model in prices_claude.json: `adaptive` is refused
+    # by opus-4-5/sonnet-4-5/haiku-4-5, `enabled`+budget_tokens by the 5-series and
+    # opus-4-7/4-8, `disabled` by fable-5. Sending one unconditionally would turn a
+    # silent default into a 400 on part of the table, so the default sends nothing.
+    price = write_price_table(tmp_path / "a.json", "m")
+    calls = []
+    AnthropicProvider(
+        client=fake_anthropic_client(make_anthropic_response(model="m"), calls=calls),
+        price_path=price,
+    ).ask(_request("m"))
+
+    assert "thinking" not in calls[0]
+
+
+def test_anthropic_sends_the_configured_thinking_policy(tmp_path, monkeypatch):
+    # ...and when the policy IS set, it reaches the paid call verbatim - the point
+    # of naming it is that flipping the constant actually changes the request.
+    monkeypatch.setattr(provider_anthropic, "THINKING", {"type": "adaptive"})
+    price = write_price_table(tmp_path / "a.json", "m")
+    calls = []
+    AnthropicProvider(
+        client=fake_anthropic_client(make_anthropic_response(model="m"), calls=calls),
+        price_path=price,
+    ).ask(_request("m"))
+
+    assert calls[0]["thinking"] == {"type": "adaptive"}
+
+
+def test_openai_omits_reasoning_effort_by_default(tmp_path):
+    # The gpt-4o family rejects the parameter outright and the accepted values differ
+    # per model, so sending one unconditionally would break the CLI's own default
+    # model. The default sends nothing.
+    price = write_price_table(tmp_path / "o.json", "m")
+    calls = []
+    OpenAIProvider(
+        client=fake_openai_client(make_openai_response(model="m"), calls=calls),
+        price_path=price,
+    ).ask(_request("m"))
+
+    assert "reasoning_effort" not in calls[0]
+
+
+def test_openai_sends_the_configured_reasoning_effort(tmp_path, monkeypatch):
+    monkeypatch.setattr(provider_openai, "REASONING_EFFORT", "low")
+    price = write_price_table(tmp_path / "o.json", "m")
+    calls = []
+    OpenAIProvider(
+        client=fake_openai_client(make_openai_response(model="m"), calls=calls),
+        price_path=price,
+    ).ask(_request("m"))
+
+    assert calls[0]["reasoning_effort"] == "low"
+
+
+def test_google_omits_thinking_config_by_default(tmp_path):
+    # Which knob a model honours (thinking_level vs thinking_budget) varies across
+    # the price table, so the default leaves the model's own default in place.
+    price = write_price_table(tmp_path / "g.json", "m")
+    calls = []
+    GoogleProvider(
+        client=fake_google_client(make_google_response(model="m"), calls=calls),
+        price_path=price,
+    ).ask(_request("m"))
+
+    assert calls[0]["config"].thinking_config is None
+
+
+def test_google_sends_the_configured_thinking_config(tmp_path, monkeypatch):
+    wanted = types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW)
+    monkeypatch.setattr(provider_google, "THINKING_CONFIG", wanted)
+    price = write_price_table(tmp_path / "g.json", "m")
+    calls = []
+    GoogleProvider(
+        client=fake_google_client(make_google_response(model="m"), calls=calls),
+        price_path=price,
+    ).ask(_request("m"))
+
+    assert calls[0]["config"].thinking_config == wanted
+
+
+def test_anthropic_client_is_disabled_when_no_credential_resolves(monkeypatch):
+    # Regression: Anthropic() is the one SDK of the three that does NOT raise on a
+    # missing key - it hands back a keyless client whose 401 arrives at call time,
+    # on the paid path. The try/except that disables OpenAI and Google therefore
+    # never fired here, so a missing key disabled two providers out of three.
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+
+    assert provider_anthropic._build_default_client() is None
+
+
+def test_anthropic_client_accepts_either_credential_variable(monkeypatch):
+    # The check reads what the client resolved, not one variable name: the SDK
+    # honours ANTHROPIC_AUTH_TOKEN as well, and testing only the api_key path
+    # would let a token-only setup be disabled by mistake.
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "token-from-env")
+    assert provider_anthropic._build_default_client() is not None
+
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-from-env")
+    assert provider_anthropic._build_default_client() is not None
+
+
 def test_providers_satisfy_contract():
     assert isinstance(OpenAIProvider(client=object()), ChatProvider)
     assert isinstance(AnthropicProvider(client=object()), ChatProvider)
@@ -81,7 +189,23 @@ def test_openai_provider_maps_response(tmp_path):
     assert result.usage.output_tokens == 50
     assert result.usage.total_tokens == 150
     assert result.usage.cached_input_tokens == 20
+    assert result.usage.reasoning_tokens == 30
     assert result.cost is not None
+
+
+def test_openai_reasoning_tokens_are_reported_without_being_billed_twice(tmp_path):
+    # OpenAI counts reasoning INSIDE completion_tokens, unlike Gemini. Reporting the
+    # breakdown must therefore leave output_tokens - and the bill - untouched; adding
+    # it on would charge for the same 30 tokens twice.
+    price = write_price_table(tmp_path / "o.json", "m")
+    provider = OpenAIProvider(
+        client=fake_openai_client(make_openai_response(model="m")), price_path=price
+    )
+    result = provider.ask(_request("m"))
+
+    assert result.usage.reasoning_tokens == 30
+    assert result.usage.output_tokens == 50  # NOT 80
+    assert result.cost.output_usd == pytest.approx(50 / 1_000_000 * 2.0)
 
 
 def test_anthropic_provider_maps_response(tmp_path):
@@ -200,7 +324,57 @@ def test_google_provider_maps_response(tmp_path):
     assert result.response_text == "hi from gemini"
     assert result.finish_reason == "STOP"
     assert result.usage.input_tokens == 120
-    assert result.usage.output_tokens == 60
-    assert result.usage.total_tokens == 180
+    assert result.usage.output_tokens == 100  # 60 answer + 40 thinking
+    assert result.usage.reasoning_tokens == 40
+    assert result.usage.total_tokens == 220
     assert result.usage.cached_input_tokens == 15
     assert result.cost is not None
+
+
+def test_google_bills_thinking_tokens_at_the_output_rate(tmp_path):
+    # Regression, measured live: candidates_token_count EXCLUDES thoughts (the API
+    # defines total as prompt + candidates + thoughts), so reading it alone billed
+    # the answer and nothing for the reasoning that produced it - ~23x under on
+    # gemini-2.5-flash, which thinks by default.
+    price = write_price_table(tmp_path / "g.json", "m")
+    provider = GoogleProvider(
+        client=fake_google_client(make_google_response(model="m", thoughts=400)),
+        price_path=price,
+    )
+    result = provider.ask(_request("m"))
+
+    assert result.usage.output_tokens == 460  # 60 answer + 400 thinking
+    assert result.cost.output_usd == pytest.approx(460 / 1_000_000 * 2.0)
+
+
+def test_google_usage_totals_stay_internally_consistent(tmp_path):
+    # total_token_count already counts thoughts, so an output_tokens that did not
+    # left every Gemini log claiming total != input + output.
+    price = write_price_table(tmp_path / "g.json", "m")
+    provider = GoogleProvider(
+        client=fake_google_client(make_google_response(model="m", thoughts=400)),
+        price_path=price,
+    )
+    usage = provider.ask(_request("m")).usage
+
+    assert usage.total_tokens == usage.input_tokens + usage.output_tokens
+
+
+def test_google_keeps_a_billed_response_whose_text_is_none(tmp_path):
+    # `.text` is None when no text part survives - max_tokens exhausted during
+    # thinking. Passing that to LLMCallResult (response_text: str) failed validation
+    # AFTER billing, degrading a paid call to salvage-only with no cost recorded,
+    # while Anthropic preserves the identical case. It must come back as a costed
+    # result with an empty body, which compare() then judges unusable.
+    price = write_price_table(tmp_path / "g.json", "m")
+    provider = GoogleProvider(
+        client=fake_google_client(
+            make_google_response(model="m", text=None, finish_reason="MAX_TOKENS")
+        ),
+        price_path=price,
+    )
+    result = provider.ask(_request("m"))
+
+    assert result.response_text == ""
+    assert result.finish_reason == "MAX_TOKENS"
+    assert result.cost is not None  # the tokens we were charged for are still priced

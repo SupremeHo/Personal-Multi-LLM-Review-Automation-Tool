@@ -25,13 +25,31 @@ def _price(log) -> str:
     )
 
 
+def _truncation_tag(result) -> str:
+    """
+    Flag an answer the model was cut off mid-way through, or "" when it finished.
+
+    Printed next to the price because such an answer looks complete but does not
+    count toward the quorum (see service_ask.usable_responses) - without saying so,
+    the usable count and the visible answers appear to disagree.
+    """
+    if service_ask.is_truncated(result):
+        return typer.style(
+            f"  [TRUNCATED: {result.finish_reason}]", fg=typer.colors.YELLOW, bold=True
+        )
+    return ""
+
+
 def _render_log(log) -> None:
     """Print a single call's outcome (success, salvaged partial, or failure)."""
     provider = typer.style(log.provider, fg=typer.colors.BRIGHT_BLUE)
     model = typer.style(log.model, fg=typer.colors.MAGENTA)
 
     if log.success and log.result is not None:
-        typer.echo(f"\n==== {provider} / {model}'s response  [{_price(log)}] ====\n")
+        typer.echo(
+            f"\n==== {provider} / {model}'s response  "
+            f"[{_price(log)}]{_truncation_tag(log.result)} ====\n"
+        )
         typer.echo(f"{log.result.response_text}\n")
     elif log.result is not None:
         # Billed but a later step failed; the paid response was preserved.
@@ -53,7 +71,7 @@ def _render_compare_entry(log) -> None:
     label = f"{log.provider} / {log.model}"
 
     if log.success and log.result is not None:
-        typer.echo(f"\n---- {label}  [{_price(log)}] ----")
+        typer.echo(f"\n---- {label}  [{_price(log)}]{_truncation_tag(log.result)} ----")
         typer.echo(log.result.response_text)
     elif log.result is not None:
         typer.echo(f"\n---- {label}  [{_price(log)}]  [PARTIAL: {log.error_type}] ----")
@@ -94,12 +112,12 @@ def ask(
     system_prompt: str,
     user_question: str,
     provider: str = "openai",
-    model: str = "gpt-4o-mini",
+    model: str = "gpt-5.6-luna",
 ):
     """
     Ask a single provider/model a question; logs to JSONL + SQLite.
 
-    Defaults to OpenAI gpt-4o-mini if no provider/model is specified. The system prompt is optional but recommended.
+    Defaults to OpenAI gpt-5.6-luna if no provider/model is specified. The system prompt is optional but recommended.
     """
     log = service_ask.ask(system_prompt, user_question, provider, model)
     _render_log(log)
@@ -113,7 +131,7 @@ def compare(
         None,
         "--target",
         "-t",
-        help="A provider:model pair to query, e.g. -t openai:gpt-4o-mini. Repeatable.",
+        help="A provider:model pair to query, e.g. -t openai:gpt-5.6-terra. Repeatable.",
     ),
 ):
     """
@@ -124,7 +142,7 @@ def compare(
     """
     if not target:
         typer.echo(
-            "[cli.py] Provide at least one --target (e.g. -t openai:gpt-4o-mini "
+            "[cli.py] Provide at least one --target (e.g. -t openai:gpt-5.6-terra "
             "-t anthropic:claude-haiku-4-5)."
         )
         raise typer.Exit(code=1)
