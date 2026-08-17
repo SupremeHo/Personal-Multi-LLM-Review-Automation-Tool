@@ -23,15 +23,18 @@ from resources.call_policy import (
     MAX_RETRIES,
     READ_TIMEOUT_SEC,
 )
+from resources.count_cost import canonical_model_name, load_price_table
 from resources.diagnostics import print_error
 from resources.log_repository import default_repository
-from resources.providers.registry import get_provider
-from resources.providers.response_error import PaidResponseError
+from resources.providers.registry import PRICE_PATHS, get_provider
+from resources.providers.response_error import PaidResponseError, ProviderCallError
 from resources.schemas import (
     DEFAULT_MAX_TOKENS,
     AuditStatus,
     CallPolicyInfo,
     CollectionStatus,
+    ComparisonManifest,
+    ComparisonTarget,
     ErrorInfo,
     LLMCallLog,
     LLMCallResult,
@@ -64,6 +67,29 @@ def is_truncated(result: LLMCallResult) -> bool:
     """Whether the model ran out of room before it finished answering."""
     reason = result.finish_reason
     return reason is not None and reason.lower() in TRUNCATED_FINISH_REASONS
+
+
+def _canonical_target(provider_name: str, model: str) -> tuple[str, str]:
+    """
+    Resolve a target's model to its canonical price-table name, for the
+    duplicate check only.
+
+    Best-effort and free by design: an unknown provider, a missing/broken price
+    file, or a model the table does not know all resolve to the target itself.
+    Failing those cases is preflight_pricing's job (after this check, still
+    before billing) - and the actual request keeps the user's spelling either
+    way, so the audit log records what was asked for.
+    """
+    price_path = PRICE_PATHS.get(provider_name)
+    if price_path is None:
+        return (provider_name, model)
+
+    try:
+        price_table = load_price_table(price_path)
+    except Exception:  # noqa: BLE001 - the duplicate check must stay free; preflight owns this failure.
+        return (provider_name, model)
+
+    return (provider_name, canonical_model_name(price_table, model))
 
 
 def _current_policy() -> CallPolicyInfo:
@@ -168,6 +194,10 @@ def run_request(
         "result": None,
         "salvage": None,
         "policy": _current_policy(),
+        # Anything that fails without reaching (or inside the safe part of) the
+        # paid call keeps this default; the branches below overwrite it the
+        # moment the call boundary reports otherwise.
+        "billing_status": "not_billed",
     }
 
     start_time = time.perf_counter()
@@ -176,6 +206,7 @@ def run_request(
         result = provider.ask(request)
         log_data["success"] = True
         log_data["result"] = result
+        log_data["billing_status"] = "billed"
 
     except PaidResponseError as e:
         # The paid call succeeded but a later step failed. Judge the run a failure,
@@ -186,6 +217,15 @@ def run_request(
         log_data["salvage"] = e.salvage
         log_data["error"] = str(e.original)
         log_data["error_type"] = type(e.original).__name__
+        log_data["billing_status"] = "billed"
+
+    except ProviderCallError as e:
+        # The paid call itself failed. Only the call boundary can judge whether a
+        # response may still have been generated (and billed); record its verdict
+        # instead of letting "the call failed" read as "nothing was spent".
+        log_data["error"] = str(e.original)
+        log_data["error_type"] = type(e.original).__name__
+        log_data["billing_status"] = "unknown" if e.billing_possible else "not_billed"
 
     except Exception as e:  # noqa: BLE001 - any failure must still produce an audit log.
         log_data["error"] = str(e)
@@ -227,6 +267,27 @@ def persist_log(log: LLMCallLog) -> list[PersistenceErrorInfo]:
     return errors
 
 
+def persist_group_manifest(manifest: ComparisonManifest) -> list[PersistenceErrorInfo]:
+    """
+    Archive one comparison batch's manifest (see ComparisonManifest).
+
+    Mirrors persist_log: faults come back as data and are printed the moment
+    they happen. A lost manifest does not touch the run rows already written -
+    it only costs the reader the "expected vs found" check for this batch.
+    """
+    errors = default_repository(BASE_DIR, DB_PATH).save_group(manifest)
+
+    for error in errors:
+        print_error(
+            f"Archiving manifest for group {error.run_id} to {error.sink} failed"
+            f" - {error.message}",
+            module="service_ask.py",
+            func="persist_group_manifest",
+        )
+
+    return errors
+
+
 def read_history(limit: int = 10, group_id: str | None = None) -> list[LLMCallLog]:
     """
     Read the most recent audit logs (newest first) via the default repository.
@@ -235,6 +296,17 @@ def read_history(limit: int = 10, group_id: str | None = None) -> list[LLMCallLo
     paths on each call, mirroring persist_log so tests can redirect DB_PATH.
     """
     return default_repository(BASE_DIR, DB_PATH).recent(limit, group_id)
+
+
+def read_group(group_id: str) -> tuple[ComparisonManifest | None, list[LLMCallLog]]:
+    """
+    Read one comparison batch whole: manifest plus every run row, target order.
+
+    This - not read_history with a group filter - is the read an evaluation must
+    use: no LIMIT to truncate a large batch, and the manifest to say how many
+    rows there SHOULD be. The manifest is None for pre-manifest batches.
+    """
+    return default_repository(BASE_DIR, DB_PATH).read_group(group_id)
 
 
 def ask(
@@ -304,6 +376,13 @@ class CompareResult:
     persist_attempted: bool = True
     """False when the caller passed persist=False, so 'nothing failed' is not read as 'stored'."""
 
+    manifest: ComparisonManifest | None = None
+    """
+    The batch's expected-shape record, built at batch end (None for an empty
+    batch). Persisted alongside the runs so a later reader can tell a complete
+    group from a truncated one; see ComparisonManifest.
+    """
+
     @property
     def usable_responses(self) -> list[LLMCallResult]:
         """
@@ -349,12 +428,18 @@ class CompareResult:
 
         Degraded when money was spent without a complete record of it: a usable
         answer whose cost could not be computed, or a billed response that never
-        parsed and left only salvage diagnostics.
+        parsed and left only salvage diagnostics. Unknown when no such gap is
+        recorded but some call failed in a way that cannot rule out billing
+        (log.billing_status == "unknown") - `clean` would then claim a settled
+        ledger nobody can actually settle. Known-incomplete outranks
+        undeterminable, so degraded wins when both apply.
         """
         if any(result.cost is None for result in self.usable_responses):
             return "degraded"
         if any(failure.salvage is not None for failure in self.failures):
             return "degraded"
+        if any(log.billing_status == "unknown" for log in self.logs):
+            return "unknown"
         return "clean"
 
     @property
@@ -372,7 +457,16 @@ class CompareResult:
             return "complete"
 
         # An error carrying no written_sinks means that run landed nowhere at all.
-        stored_nowhere = {e.run_id for e in self.persist_errors if not e.written_sinks}
+        # Counted against the RUN ids only: persist_errors also carries manifest
+        # faults (run_id = group_id, sink "*:manifest"), and letting one of those
+        # into this set would turn "every run archived, manifest lost" into a
+        # false "failed"/"partial" verdict about the runs themselves.
+        run_ids = {log.run_id for log in self.logs}
+        stored_nowhere = {
+            e.run_id
+            for e in self.persist_errors
+            if not e.written_sinks and e.run_id in run_ids
+        }
         return "failed" if len(stored_nowhere) == len(self.logs) else "partial"
 
 
@@ -415,14 +509,31 @@ def compare(
 
     # Asking one model the same question twice is not cross-validation: it buys a
     # second billed answer that inflates the quorum with a correlated opinion. Reject
-    # it here, while it is still free.
-    duplicates = sorted({t for t in targets if targets.count(t) > 1})
-    if duplicates:
-        listed = ", ".join(f"{provider}:{model}" for provider, model in duplicates)
+    # it here, while it is still free. Compared on canonical price-table names, not
+    # the raw strings: the tables carry aliases (gpt-4o-mini-2024-07-18 →
+    # gpt-4o-mini), so two spellings of one model are still one model.
+    by_canonical: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for t in targets:
+        by_canonical.setdefault(_canonical_target(*t), []).append(t)
+
+    duplicated = {c: ts for c, ts in by_canonical.items() if len(ts) > 1}
+    if duplicated:
+        listed = "; ".join(
+            " + ".join(f"{provider}:{model}" for provider, model in ts)
+            + (
+                f" (all price as {c_provider}:{c_model})"
+                if any(
+                    (provider, model) != (c_provider, c_model) for provider, model in ts
+                )
+                else ""
+            )
+            for (c_provider, c_model), ts in duplicated.items()
+        )
         message = (
             f"Duplicate compare targets are rejected: {listed}. "
-            "Each provider:model may appear only once - a repeated model would be "
-            "billed twice and counted twice toward the quorum."
+            "Each model may appear only once, under any of its price-table "
+            "aliases - a repeated model would be billed twice and counted twice "
+            "toward the quorum."
         )
         print_error(message, module="service_ask.py", func="compare")
         raise ValueError(message)
@@ -496,6 +607,10 @@ def compare(
                         "result": None,
                         "salvage": None,
                         "policy": _current_policy(),
+                        # The worker died outside run_request's accounting, so
+                        # whether its call was ever made - let alone billed - is
+                        # exactly the case "unknown" exists for.
+                        "billing_status": "unknown",
                     }
                 )
 
@@ -523,5 +638,39 @@ def compare(
 
             if persist:
                 outcome.persist_errors.extend(persist_log(log))
+
+    # Frozen AFTER every run is collected and (when asked) archived, because the
+    # three status axes and the persist faults are only final here. The manifest
+    # is what lets a later reader tell this batch's truncated read from its
+    # whole one - runs rows alone cannot carry the denominator.
+    outcome.manifest = ComparisonManifest(
+        group_id=group_id,
+        created_at=created_at,
+        targets=[
+            ComparisonTarget(
+                provider=provider_name,
+                model=selected_model,
+                canonical_model=_canonical_target(provider_name, selected_model)[1],
+                run_id=log.run_id,
+            )
+            for (provider_name, selected_model), log in zip(
+                targets, outcome.logs, strict=True
+            )
+        ],
+        target_count=len(targets),
+        collected_count=len(outcome.logs),
+        usable_count=len(outcome.usable_responses),
+        quorum=QUORUM,
+        collection_status=outcome.collection_status,
+        audit_status=outcome.audit_status,
+        persistence_status=outcome.persistence_status,
+        persist_errors=list(outcome.persist_errors),
+    )
+
+    if persist:
+        # The manifest's own storage fault arrives after the manifest is frozen,
+        # so it can only live on the result (and the console) - never inside the
+        # manifest it failed to write.
+        outcome.persist_errors.extend(persist_group_manifest(outcome.manifest))
 
     return outcome

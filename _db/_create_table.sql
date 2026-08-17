@@ -62,3 +62,21 @@ ON model_responses(provider, model);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_model_responses_provider_raw_response
 ON model_responses(provider, raw_response_id)
 WHERE raw_response_id IS NOT NULL;
+-- One row per comparison batch: what the batch EXPECTED, so a later reader can
+-- tell a complete group from a truncated or half-archived one. The runs table
+-- alone cannot say this - a run whose SQLite write failed leaves no trace here,
+-- and group_id says nothing about how many rows there should be.
+CREATE TABLE IF NOT EXISTS comparison_groups (
+    id INTEGER PRIMARY KEY,
+    group_id TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    schema_version INTEGER NOT NULL,
+    target_count INTEGER NOT NULL,
+    collected_count INTEGER NOT NULL,
+    usable_count INTEGER NOT NULL,
+    quorum INTEGER NOT NULL,
+    collection_status TEXT NOT NULL,
+    audit_status TEXT NOT NULL,
+    persistence_status TEXT,
+    raw_json TEXT NOT NULL
+);

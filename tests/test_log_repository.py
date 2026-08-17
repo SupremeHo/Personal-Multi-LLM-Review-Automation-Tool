@@ -15,7 +15,13 @@ from resources.log_repository import (
     SqliteLogWriter,
     default_repository,
 )
-from resources.schemas import LLMCallLog, LLMCallResult, TokenUsageInfo
+from resources.schemas import (
+    ComparisonManifest,
+    ComparisonTarget,
+    LLMCallLog,
+    LLMCallResult,
+    TokenUsageInfo,
+)
 
 
 def _log(
@@ -39,6 +45,28 @@ def _log(
             response_text="t",
             usage=TokenUsageInfo(input_tokens=1, output_tokens=1, total_tokens=2),
         ),
+    )
+
+
+def _manifest(
+    group_id: str = "g1", run_ids: tuple[str, ...] = ("run-1",)
+) -> ComparisonManifest:
+    return ComparisonManifest(
+        group_id=group_id,
+        created_at=datetime(2026, 7, 21, 10, 30, 0),
+        targets=[
+            ComparisonTarget(
+                provider="openai", model="m", canonical_model="m", run_id=r
+            )
+            for r in run_ids
+        ],
+        target_count=len(run_ids),
+        collected_count=len(run_ids),
+        usable_count=len(run_ids),
+        quorum=2,
+        collection_status="insufficient",
+        audit_status="clean",
+        persistence_status="complete",
     )
 
 
@@ -165,6 +193,232 @@ def test_sqlite_reader_filters_by_group(temp_db):
 
     assert {log.run_id for log in logs} == {"r1", "r2"}
     assert all(log.group_id == "g1" for log in logs)
+
+
+def test_sqlite_writer_round_trips_a_group_manifest(temp_db):
+    writer = SqliteLogWriter(temp_db)
+    writer.write(_log(run_id="r1", response_id="a1", group_id="g1"))
+    writer.write_group(_manifest(group_id="g1", run_ids=("r1",)))
+
+    manifest, logs = SqliteLogReader(temp_db).read_group("g1")
+
+    assert manifest is not None
+    assert manifest.target_count == 1
+    assert manifest.targets[0].run_id == "r1"
+    assert [log.run_id for log in logs] == ["r1"]
+
+
+def test_read_group_returns_every_row_in_target_order(temp_db):
+    # The trap this exists to close: recent()'s LIMIT (default 10) silently
+    # truncated any larger batch into a complete-looking subset, newest first.
+    # A group read must be the whole batch, in the order the targets ran.
+    writer = SqliteLogWriter(temp_db)
+    for i in range(12):
+        writer.write(_log(run_id=f"r{i}", response_id=f"a{i}", group_id="g"))
+
+    truncated = SqliteLogReader(temp_db).recent(group_id="g")
+    _, whole = SqliteLogReader(temp_db).read_group("g")
+
+    assert len(truncated) == 10  # the old read really does drop rows
+    assert [log.run_id for log in whole] == [f"r{i}" for i in range(12)]
+
+
+def test_read_group_of_an_unknown_group_is_empty_not_an_error(temp_db):
+    manifest, logs = SqliteLogReader(temp_db).read_group("missing")
+
+    assert manifest is None
+    assert logs == []
+
+
+def test_read_group_survives_a_pre_manifest_database(temp_db):
+    # Databases from before comparison_groups existed have no such table at all;
+    # the group's runs must still come back, with the manifest simply absent.
+    conn = sqlite3.connect(temp_db)
+    conn.execute("DROP TABLE comparison_groups")
+    conn.commit()
+    conn.close()
+    SqliteLogWriter(temp_db).write(_log(run_id="r1", response_id="a1", group_id="g1"))
+
+    manifest, logs = SqliteLogReader(temp_db).read_group("g1")
+
+    assert manifest is None
+    assert [log.run_id for log in logs] == ["r1"]
+
+
+def test_reader_skips_an_unreadable_row_instead_of_dying(temp_db):
+    # Regression: one row an older schema wrote (or a corrupted one) used to take
+    # the whole query down - history died as soon as it entered the LIMIT window.
+    writer = SqliteLogWriter(temp_db)
+    for i in range(3):
+        writer.write(_log(run_id=f"r{i}", response_id=f"a{i}", group_id="g"))
+    conn = sqlite3.connect(temp_db)
+    conn.execute(
+        "UPDATE runs SET raw_json = '{\"run_id\": \"r1\"}' WHERE run_id = 'r1'"
+    )
+    conn.commit()
+    conn.close()
+
+    recent = SqliteLogReader(temp_db).recent(limit=10)
+    _, whole = SqliteLogReader(temp_db).read_group("g")
+
+    assert [log.run_id for log in recent] == ["r2", "r0"]  # r1 skipped, not fatal
+    assert [log.run_id for log in whole] == ["r0", "r2"]
+
+
+def _insert_raw(db_path, run_id: str, record: dict) -> None:
+    """Plant a runs row exactly as an older schema wrote it (raw_json verbatim)."""
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO runs (
+                run_id, group_id, created_at, system_prompt, user_prompt,
+                success, raw_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                record.get("group_id"),
+                record.get("created_at", "2025-06-01T10:00:00"),
+                record.get("system_prompt", "s"),
+                record.get("user_prompt", "q"),
+                int(bool(record.get("success", False))),
+                json.dumps(record, ensure_ascii=False),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_reader_translates_the_earliest_usage_field_names(temp_db):
+    # 18 real rows in the local archive were written with OpenAI's raw spellings
+    # (prompt_tokens/completion_tokens/cached_tokens) before the vocabulary went
+    # provider-neutral. They must come back as readable logs, not be skipped -
+    # skipping is for rows nobody can translate.
+    _insert_raw(
+        temp_db,
+        "legacy-1",
+        {
+            "run_id": "legacy-1",
+            "created_at": "2025-06-01T10:00:00",
+            "system_prompt": "s",
+            "user_prompt": "q",
+            "success": True,
+            "error": None,
+            "elapsed_sec": 1.0,
+            "result": {
+                "response_id": "resp-legacy",
+                "provider": "OpenAI",
+                "model": "gpt-4o-mini",
+                "response_text": "old answer",
+                "usage": {
+                    "prompt_tokens": 40,
+                    "completion_tokens": 606,
+                    "total_tokens": 646,
+                    "cached_tokens": 3,
+                },
+            },
+        },
+    )
+
+    (log,) = SqliteLogReader(temp_db).recent(limit=5)
+
+    assert log.result.usage.input_tokens == 40
+    assert log.result.usage.output_tokens == 606
+    assert log.result.usage.total_tokens == 646
+    assert log.result.usage.cached_input_tokens == 3
+    assert log.result.response_text == "old answer"
+
+
+def test_legacy_rename_never_overwrites_a_current_field(temp_db):
+    # An intermediate-era row can carry BOTH spellings; the value the current
+    # schema name holds is the normalized one and must win.
+    _insert_raw(
+        temp_db,
+        "mixed-1",
+        {
+            "run_id": "mixed-1",
+            "created_at": "2025-06-01T10:00:00",
+            "system_prompt": "s",
+            "user_prompt": "q",
+            "success": True,
+            "result": {
+                "response_id": "resp-mixed",
+                "provider": "openai",
+                "model": "m",
+                "response_text": "t",
+                "usage": {
+                    "input_tokens": 1,
+                    "output_tokens": 1,
+                    "cached_tokens": 5,
+                    "cached_input_tokens": 7,
+                },
+            },
+        },
+    )
+
+    (log,) = SqliteLogReader(temp_db).recent(limit=5)
+
+    assert log.result.usage.cached_input_tokens == 7  # the stray legacy 5 is dropped
+
+
+def test_reader_accepts_a_policy_from_before_the_pool_cap(temp_db):
+    # Nine real rows carry a CallPolicyInfo with only the timeout/retry budget -
+    # max_parallel_calls did not exist yet. The recorded budget must survive;
+    # inventing a pool cap for them would falsify what they ran under.
+    _insert_raw(
+        temp_db,
+        "oldpolicy-1",
+        {
+            "run_id": "oldpolicy-1",
+            "created_at": "2025-07-01T10:00:00",
+            "system_prompt": "s",
+            "user_prompt": "q",
+            "success": False,
+            "error": "boom",
+            "error_type": "RuntimeError",
+            "result": None,
+            "policy": {
+                "connect_timeout_sec": 10.0,
+                "read_timeout_sec": 300.0,
+                "max_retries": 2,
+            },
+        },
+    )
+
+    (log,) = SqliteLogReader(temp_db).recent(limit=5)
+
+    assert log.policy.max_parallel_calls is None
+    assert log.policy.read_timeout_sec == 300.0
+    assert log.policy.max_retries == 2
+
+
+class _BoomGroupWriter:
+    """A sqlite-shaped writer whose manifest write fails."""
+
+    sink_name = "sqlite"
+
+    def write(self, log: LLMCallLog) -> None:  # pragma: no cover - unused here
+        pass
+
+    def write_group(self, manifest: ComparisonManifest) -> None:
+        raise OSError("sqlite is unavailable")
+
+
+def test_save_group_skips_incapable_writers_and_reports_faults():
+    # JSONL has no place for a batch-level manifest, so a writer without
+    # write_group is skipped - not failed. A capable writer that breaks reports
+    # a sink tagged ":manifest" so a lost manifest is not read as a lost run.
+    errors = LogRepository([_Recorder("jsonl", []), _BoomGroupWriter()]).save_group(
+        _manifest(group_id="g1")
+    )
+
+    (error,) = errors
+    assert error.sink == "sqlite:manifest"
+    assert error.run_id == "g1"  # the only id a manifest has
+    assert error.error_type == "OSError"
 
 
 def test_repository_recent_reads_back_a_saved_log(tmp_path, temp_db):

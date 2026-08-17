@@ -6,11 +6,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from resources.diagnostics import print_error
 from resources.providers.base_provider import ChatProvider
-from resources.providers.provider_anthropic import AnthropicProvider
-from resources.providers.provider_google import GoogleProvider
-from resources.providers.provider_openai import OpenAIProvider
+from resources.providers.provider_anthropic import (
+    PRICE_PATH_ANTHROPIC,
+    AnthropicProvider,
+)
+from resources.providers.provider_google import PRICE_PATH_GOOGLE, GoogleProvider
+from resources.providers.provider_openai import PRICE_PATH_OPENAI, OpenAIProvider
 
 # Instantiated once and reused. Each provider holds a module-level SDK client
 # (or None when its key is missing), so construction is cheap and side-effect free.
@@ -18,6 +23,16 @@ PROVIDERS: dict[str, ChatProvider] = {
     OpenAIProvider.provider_name: OpenAIProvider(),
     AnthropicProvider.provider_name: AnthropicProvider(),
     GoogleProvider.provider_name: GoogleProvider(),
+}
+
+# Each provider's price table, keyed like PROVIDERS. The service layer reads it
+# to resolve model aliases (`alias_of`) before a paid call - the providers keep
+# owning their own price path; this only makes the mapping resolvable by key.
+# Adding a provider adds one line here too.
+PRICE_PATHS: dict[str, Path] = {
+    OpenAIProvider.provider_name: PRICE_PATH_OPENAI,
+    AnthropicProvider.provider_name: PRICE_PATH_ANTHROPIC,
+    GoogleProvider.provider_name: PRICE_PATH_GOOGLE,
 }
 
 

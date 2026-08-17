@@ -14,12 +14,29 @@ How much of a comparison actually came back, measured in *usable answers*.
 batch still not be a comparison - one answer has nothing to be compared against.
 """
 
-AuditStatus = Literal["clean", "degraded"]
+AuditStatus = Literal["clean", "degraded", "unknown"]
 """
 Whether the money ledger for a batch is complete.
 
-`degraded` means something was billed but not fully accounted for. It says nothing
-about answer quality, and must never be read as one.
+`degraded` means something was billed but not fully accounted for. `unknown`
+means the ledger cannot be settled either way: a call failed mid-flight (e.g. a
+read timeout after the provider started answering), so whether it was billed is
+not determinable from here - see BillingStatus. Known-incomplete outranks
+undeterminable, so a batch that is both reports `degraded`.
+
+Neither says anything about answer quality, and must never be read as one.
+"""
+
+BillingStatus = Literal["not_billed", "billed", "unknown"]
+"""
+Whether one call spent money, judged at the call boundary.
+
+`billed` covers every call whose response was received, even when a later step
+failed (see PaidResponseError). `not_billed` covers failures that verifiably
+precede generation: everything before the paid call, plus requests the provider
+rejected with an HTTP 4xx. `unknown` is the honest remainder - the call failed
+in a way that cannot rule out a generated, billed response (read timeout,
+connection lost mid-response, 5xx), so "not billed" would overstate the ledger.
 """
 
 PersistenceStatus = Literal["complete", "partial", "failed"]
@@ -287,8 +304,16 @@ class CallPolicyInfo(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    max_parallel_calls: int
-    """Ceiling on simultaneous provider calls in one `compare`."""
+    max_parallel_calls: int | None = None
+    """
+    Ceiling on simultaneous provider calls in one `compare`.
+
+    Optional because the field arrived after live logs existed: nine archived
+    runs carry a policy with only the timeout/retry budget, and requiring it
+    here made those rows unreadable. None means "recorded before the pool cap
+    existed", not "uncapped" - inventing a number for them would falsify the
+    budget they actually ran under.
+    """
 
     connect_timeout_sec: float
     """Handshake budget; expiring here means nothing was billed."""
@@ -365,6 +390,15 @@ class LLMCallLog(BaseModel):
 
     policy: CallPolicyInfo | None = None
     """Timeout/retry budget in effect for this call; None on logs written before it existed."""
+
+    billing_status: BillingStatus | None = None
+    """
+    Whether this call spent money; None on logs written before the field existed.
+
+    Judged at the call boundary (runner.run_chat via ProviderCallError), not
+    from the outcome: a failed call may still have been billed, and `success`
+    alone cannot say so.
+    """
 
 
 class ErrorInfo(BaseModel):
@@ -456,3 +490,89 @@ class PersistenceErrorInfo(BaseModel):
 
     created_at: datetime
     """When the storage failure was recorded."""
+
+
+MANIFEST_SCHEMA_VERSION = 1
+"""
+Version stamp written into every ComparisonManifest.
+
+Bumped when the manifest's shape changes, so a future reader can tell which
+translation an old row needs instead of guessing from its fields.
+"""
+
+
+class ComparisonTarget(BaseModel):
+    """One planned call of a comparison batch, as the manifest expected it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str
+    """Canonical provider key of the planned call."""
+
+    model: str
+    """Model as the user spelled it - what the audit rows record."""
+
+    canonical_model: str
+    """
+    Price-table canonical name (equal to `model` when it is not an alias).
+
+    Stored so a later reader can judge independence without re-loading the price
+    tables as they were on the day of the batch.
+    """
+
+    run_id: str
+    """The runs row this target should have produced - the join key for audits."""
+
+
+class ComparisonManifest(BaseModel):
+    """
+    What one comparison batch was SUPPOSED to contain, frozen at batch end.
+
+    The runs table records what made it to disk; it cannot say what should have.
+    A run whose SQLite write failed leaves no row, and a reader who selects by
+    group_id sees a smaller batch with nothing marking it incomplete - an
+    evaluation over it would judge a partial candidate set as the whole one.
+    This manifest is the missing denominator: the expected targets in order,
+    how much actually came back, and the three status axes as compare() judged
+    them at the time.
+
+    `persistence_status`/`persist_errors` cover the RUN rows only: they are
+    snapshotted before the manifest itself is written (the manifest cannot
+    record the outcome of its own write; that failure is reported to the caller
+    as persistence-error data instead).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: int = MANIFEST_SCHEMA_VERSION
+    """Shape version of this manifest row (see MANIFEST_SCHEMA_VERSION)."""
+
+    group_id: str
+    """The comparison batch this manifest describes (matches runs.group_id)."""
+
+    created_at: datetime
+    """When the batch was started (same stamp its runs carry)."""
+
+    targets: list[ComparisonTarget]
+    """Every planned call, in target order - the expected shape of the batch."""
+
+    target_count: int
+    """len(targets), denormalized so SQL can compare it to counted rows."""
+
+    collected_count: int
+    """How many calls produced a log in memory (a worker death still counts one)."""
+
+    usable_count: int
+    """How many answers qualified for the cross-check (see usable_responses)."""
+
+    quorum: int
+    """The quorum the batch was judged against, frozen with the batch."""
+
+    collection_status: CollectionStatus
+    audit_status: AuditStatus
+
+    persistence_status: PersistenceStatus | None = None
+    """Run-row archive status at manifest time; None when persistence was skipped."""
+
+    persist_errors: list[PersistenceErrorInfo] = []
+    """Run-row storage faults, preserved as data (empty when everything landed)."""

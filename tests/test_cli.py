@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import sqlite3
 
 import pytest
 from typer.testing import CliRunner
@@ -12,6 +13,7 @@ from resources.count_cost import preflight_pricing
 from resources.providers import provider_openai, registry
 from resources.services import service_ask as svc
 from tests.fakes import (
+    AmbiguousBillingProvider,
     FailProvider,
     GoodProvider,
     PaidFailProvider,
@@ -32,6 +34,7 @@ def cli_env(monkeypatch, tmp_path, temp_db):
             "fail": FailProvider(),
             "paidfail": PaidFailProvider(),
             "truncated": TruncatedProvider(),
+            "ambiguous": AmbiguousBillingProvider(),
         },
     )
     monkeypatch.setattr(svc, "BASE_DIR", tmp_path)
@@ -110,6 +113,19 @@ def test_compare_warns_when_the_batch_is_not_a_comparison(cli_env):
     assert "Not a comparison" in result.stdout
 
 
+def test_compare_says_when_a_failed_calls_billing_is_unknown(cli_env):
+    # A mid-flight failure (read timeout while the provider was generating) used
+    # to render like any unbilled failure while the batch claimed "audit: clean".
+    # The reader has money possibly on the line; the output must say so.
+    result = runner.invoke(
+        cli.app, ["compare", "s", "q", "-t", "good:m1", "-t", "ambiguous:m2"]
+    )
+
+    assert result.exit_code == 0
+    assert "audit: unknown" in result.stdout
+    assert "whether it was billed is unknown" in result.stdout
+
+
 def test_compare_rejects_duplicate_targets_without_calling_anything(cli_env):
     result = runner.invoke(
         cli.app, ["compare", "s", "q", "-t", "good:m1", "-t", "good:m1"]
@@ -118,3 +134,46 @@ def test_compare_rejects_duplicate_targets_without_calling_anything(cli_env):
     assert result.exit_code == 1
     assert "Duplicate compare targets" in result.stdout
     assert _headers(result.stdout) == []  # nothing was asked, nothing was billed
+
+
+def test_history_group_view_shows_the_whole_batch_with_its_manifest(cli_env):
+    batch = svc.compare("s", "q", [("good", "m1"), ("good", "m2")])
+
+    result = runner.invoke(cli.app, ["history", "-g", batch.group_id])
+
+    assert result.exit_code == 0
+    assert "2 target(s) expected, 2 stored" in result.stdout
+    assert "collection: complete" in result.stdout
+    assert "persistence: complete" in result.stdout
+    assert "WARNING" not in result.stdout
+
+
+def test_history_group_view_warns_when_stored_rows_are_missing(cli_env, temp_db):
+    # The scenario the manifest exists for: a run's SQLite write failed (here,
+    # its row is deleted), and the group used to read as a smaller, healthy
+    # batch. The reader must be told the candidate set is incomplete.
+    batch = svc.compare("s", "q", [("good", "m1"), ("good", "m2")])
+    conn = sqlite3.connect(temp_db)
+    conn.execute("DELETE FROM runs WHERE run_id = ?", (batch.logs[0].run_id,))
+    conn.commit()
+    conn.close()
+
+    result = runner.invoke(cli.app, ["history", "-g", batch.group_id])
+
+    assert result.exit_code == 0
+    assert "2 target(s) expected, 1 stored" in result.stdout
+    assert "incomplete on disk" in result.stdout
+
+
+def test_history_group_view_says_when_a_batch_predates_manifests(cli_env, temp_db):
+    batch = svc.compare("s", "q", [("good", "m1"), ("good", "m2")])
+    conn = sqlite3.connect(temp_db)
+    conn.execute("DROP TABLE comparison_groups")  # a database from before stage 2
+    conn.commit()
+    conn.close()
+
+    result = runner.invoke(cli.app, ["history", "-g", batch.group_id])
+
+    assert result.exit_code == 0
+    assert "predates comparison manifests" in result.stdout
+    assert "checked for completeness" in result.stdout

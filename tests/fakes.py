@@ -8,7 +8,7 @@ import time
 import types
 from pathlib import Path
 
-from resources.providers.response_error import PaidResponseError
+from resources.providers.response_error import PaidResponseError, ProviderCallError
 from resources.schemas import (
     CostInfo,
     LLMCallResult,
@@ -287,6 +287,29 @@ class ParseFailProvider:
                 raw_usage={"input_tokens": 7},
             ),
         )
+
+
+class AmbiguousBillingProvider:
+    """
+    The paid call died mid-flight (e.g. a read timeout while the provider was
+    generating), so whether it was billed is unknowable - the boundary says so.
+    """
+
+    provider_name = "ambiguous"
+
+    def ask(self, request: LLMRequest) -> LLMCallResult:
+        raise ProviderCallError(
+            TimeoutError("read timed out mid-response"), billing_possible=True
+        )
+
+
+class RejectedCallProvider:
+    """The provider rejected the request before generating (HTTP 4xx): not billed."""
+
+    provider_name = "rejected"
+
+    def ask(self, request: LLMRequest) -> LLMCallResult:
+        raise ProviderCallError(ValueError("400 bad request"), billing_possible=False)
 
 
 class BadResultProvider:

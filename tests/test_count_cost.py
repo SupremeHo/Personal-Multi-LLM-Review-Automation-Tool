@@ -6,6 +6,7 @@ import pytest
 
 from resources.count_cost import (
     calculate_token_cost,
+    canonical_model_name,
     preflight_pricing,
     resolve_model_entry,
     to_decimal,
@@ -89,6 +90,18 @@ def test_resolve_model_entry_follows_alias():
 def test_resolve_unknown_model_raises():
     with pytest.raises(KeyError):
         resolve_model_entry(PRICE_TABLE, "nope")
+
+
+def test_canonical_model_name_resolves_an_alias():
+    assert canonical_model_name(PRICE_TABLE, "alias") == "base"
+
+
+def test_canonical_model_name_is_identity_for_canonical_and_unknown_models():
+    # Unknown models must not raise: this runs inside the free duplicate check,
+    # where failing a bad model name is preflight_pricing's job.
+    assert canonical_model_name(PRICE_TABLE, "base") == "base"
+    assert canonical_model_name(PRICE_TABLE, "nope") == "nope"
+    assert canonical_model_name({}, "nope") == "nope"
 
 
 def test_preflight_returns_table_and_validates_model(tmp_path):

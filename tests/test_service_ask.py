@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 import sqlite3
 import threading
 from datetime import timedelta
@@ -21,6 +22,7 @@ from resources.providers.provider_anthropic import AnthropicProvider
 from resources.schemas import DEFAULT_MAX_TOKENS, LLMRequest
 from resources.services import service_ask as svc
 from tests.fakes import (
+    AmbiguousBillingProvider,
     BadResultProvider,
     BadSalvageProvider,
     BarrierProvider,
@@ -30,6 +32,7 @@ from tests.fakes import (
     GoodProvider,
     PaidFailProvider,
     ParseFailProvider,
+    RejectedCallProvider,
     SlowProvider,
     TruncatedProvider,
     make_result,
@@ -42,6 +45,9 @@ class _UnavailableSqlite:
     sink_name = "sqlite"
 
     def write(self, log) -> None:
+        raise sqlite3.OperationalError("database is locked")
+
+    def write_group(self, manifest) -> None:
         raise sqlite3.OperationalError("database is locked")
 
 
@@ -195,6 +201,8 @@ def test_compare_isolates_a_worker_that_raises(monkeypatch):
     # the dead worker degrades to a failed log instead of killing the batch...
     assert [log.provider for log in result.logs] == ["boom", "good"]
     assert result.failures[0].error_type == "MemoryError"
+    # ...whose billing nobody can vouch for - the worker died outside accounting
+    assert result.logs[0].billing_status == "unknown"
     # ...and the target queued behind it still comes back
     assert [r.provider for r in result.successes] == ["good"]
 
@@ -219,7 +227,12 @@ def test_compare_survives_a_storage_fault_and_records_it(monkeypatch, tmp_path):
     assert [r.provider for r in result.successes] == ["good", "slow"]
     assert result.failures == []  # a storage fault is not a failed call
     # ...and the archive fault is data, including which sink did accept the log
-    assert [e.sink for e in result.persist_errors] == ["sqlite", "sqlite"]
+    # (the batch manifest's own write failed too, reported under its own sink)
+    assert [e.sink for e in result.persist_errors] == [
+        "sqlite",
+        "sqlite",
+        "sqlite:manifest",
+    ]
     assert result.persist_errors[0].written_sinks == ["jsonl"]
     # the sink that did work still archived both logs (one file per provider)
     assert len(list((tmp_path / "_logs").rglob("*.jsonl"))) == 2
@@ -445,6 +458,158 @@ def test_compare_rejects_duplicate_targets(fake_providers):
         )
 
 
+def _alias_price_table(tmp_path):
+    """A price table where m-dated is an alias_of m-canon, like the real ones."""
+    price = tmp_path / "prices.json"
+    price.write_text(
+        json.dumps(
+            {
+                "updated_at": "2099-01-01",
+                "source": "test",
+                "models": {
+                    "m-canon": {"input": 1.0, "output": 2.0},
+                    "m-dated": {"alias_of": "m-canon"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return price
+
+
+def test_compare_rejects_a_duplicate_hidden_behind_a_model_alias(
+    fake_providers, monkeypatch, tmp_path
+):
+    # The price tables alias dated snapshots to their canonical model
+    # (gpt-4o-mini-2024-07-18 → gpt-4o-mini), so an exact-string check let the
+    # same model in twice under two spellings - two billed calls, one opinion,
+    # reported as a quorum. The rejection must name both spellings.
+    monkeypatch.setitem(registry.PRICE_PATHS, "good", _alias_price_table(tmp_path))
+
+    with pytest.raises(ValueError, match=r"good:m-canon \+ good:m-dated"):
+        svc.compare("s", "q", [("good", "m-canon"), ("good", "m-dated")], persist=False)
+
+
+def test_compare_alias_check_leaves_distinct_and_unknown_models_alone(
+    fake_providers, monkeypatch, tmp_path
+):
+    # Models the table does not know resolve to themselves: the duplicate check
+    # must not reject (or crash on) targets that only preflight can judge.
+    monkeypatch.setitem(registry.PRICE_PATHS, "good", _alias_price_table(tmp_path))
+
+    result = svc.compare(
+        "s", "q", [("good", "m-dated"), ("good", "m-unknown")], persist=False
+    )
+
+    assert len(result.successes) == 2
+    # The manifest freezes the resolution, so a later reader can judge
+    # independence without the price tables as they were that day.
+    assert [t.canonical_model for t in result.manifest.targets] == [
+        "m-canon",
+        "m-unknown",
+    ]
+    assert [t.model for t in result.manifest.targets] == ["m-dated", "m-unknown"]
+
+
+def test_billing_status_is_billed_for_successes_and_paid_failures(fake_providers):
+    # A PaidResponseError means the response was received - money moved, however
+    # the run was judged.
+    assert svc.ask("s", "q", "good", "m", persist=False).billing_status == "billed"
+    assert svc.ask("s", "q", "paidfail", "m", persist=False).billing_status == "billed"
+
+
+def test_billing_status_is_not_billed_when_the_failure_precedes_the_call(
+    fake_providers,
+):
+    # An unknown provider never reaches the API; a provider that raises outside
+    # the call boundary (anything but ProviderCallError) is pre-billing too.
+    assert svc.ask("s", "q", "nope", "m", persist=False).billing_status == "not_billed"
+    assert svc.ask("s", "q", "fail", "m", persist=False).billing_status == "not_billed"
+
+
+def test_billing_status_is_unknown_when_the_call_died_mid_flight(monkeypatch):
+    monkeypatch.setattr(
+        registry, "PROVIDERS", {"ambiguous": AmbiguousBillingProvider()}
+    )
+
+    log = svc.ask("s", "q", "ambiguous", "m", persist=False)
+
+    assert log.success is False
+    assert log.billing_status == "unknown"
+    assert log.error_type == "TimeoutError"  # the original failure, not the wrapper
+
+
+def test_billing_status_is_not_billed_on_a_pre_generation_rejection(monkeypatch):
+    monkeypatch.setattr(registry, "PROVIDERS", {"rejected": RejectedCallProvider()})
+
+    log = svc.ask("s", "q", "rejected", "m", persist=False)
+
+    assert log.billing_status == "not_billed"
+    assert log.error_type == "ValueError"
+
+
+def test_audit_status_is_unknown_when_billing_cannot_be_ruled_out(monkeypatch):
+    # Before billing_status existed this batch reported "clean": the mid-flight
+    # failure left no salvage and no uncosted result, so the ledger claimed to be
+    # settled when nobody could actually settle it.
+    monkeypatch.setattr(
+        registry,
+        "PROVIDERS",
+        {"good": GoodProvider(), "ambiguous": AmbiguousBillingProvider()},
+    )
+
+    result = svc.compare(
+        "s",
+        "q",
+        [("good", "m1"), ("good", "m2"), ("ambiguous", "m3")],
+        persist=False,
+    )
+
+    assert result.collection_status == "partial"  # the quorum is unaffected
+    assert result.audit_status == "unknown"
+
+
+def test_audit_status_degraded_outranks_unknown(monkeypatch):
+    # Known-incomplete is the stronger warning: money verifiably went unaccounted
+    # for, and that must not be diluted to "maybe" by a second failure.
+    monkeypatch.setattr(
+        registry,
+        "PROVIDERS",
+        {
+            "good": GoodProvider(),
+            "paidfail": PaidFailProvider(),
+            "ambiguous": AmbiguousBillingProvider(),
+        },
+    )
+
+    result = svc.compare(
+        "s",
+        "q",
+        [("good", "m1"), ("paidfail", "m2"), ("ambiguous", "m3")],
+        persist=False,
+    )
+
+    assert result.audit_status == "degraded"
+
+
+def test_audit_status_stays_clean_when_a_failure_verifiably_did_not_bill(monkeypatch):
+    # A 4xx rejection is proven free, so it must not drag the ledger to "unknown".
+    monkeypatch.setattr(
+        registry,
+        "PROVIDERS",
+        {"good": GoodProvider(), "rejected": RejectedCallProvider()},
+    )
+
+    result = svc.compare(
+        "s",
+        "q",
+        [("good", "m1"), ("good", "m2"), ("rejected", "m3")],
+        persist=False,
+    )
+
+    assert result.audit_status == "clean"
+
+
 def test_compare_caps_the_number_of_parallel_calls(monkeypatch):
     # --target is repeatable with no limit, so an uncapped pool turns a typo into a
     # burst of concurrent requests. Every target still runs, just not all at once.
@@ -531,6 +696,75 @@ def test_compare_persists_every_call_under_one_group(monkeypatch, tmp_path, temp
     assert len({run_id for run_id, _ in rows}) == 3
     # ...all tied together by the single shared group_id
     assert {group_id for _, group_id in rows} == {result.group_id}
+
+
+def test_compare_persists_a_manifest_describing_the_whole_batch(
+    monkeypatch, tmp_path, temp_db
+):
+    # The runs table records what made it to disk; only the manifest records what
+    # SHOULD have. Without it a reader cannot tell a complete group from a
+    # truncated or half-archived one.
+    monkeypatch.setattr(
+        registry, "PROVIDERS", {"good": GoodProvider(), "fail": FailProvider()}
+    )
+    monkeypatch.setattr(svc, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(svc, "DB_PATH", temp_db)
+
+    result = svc.compare("s", "q", [("good", "m1"), ("fail", "m2"), ("good", "m3")])
+
+    manifest, logs = svc.read_group(result.group_id)
+
+    assert manifest is not None
+    assert manifest.target_count == 3
+    assert manifest.collected_count == 3
+    assert manifest.usable_count == 2
+    assert manifest.quorum == svc.QUORUM
+    assert manifest.collection_status == "partial"
+    assert manifest.audit_status == "clean"
+    assert manifest.persistence_status == "complete"
+    assert manifest.persist_errors == []
+    # target order is frozen, and each target points at its runs row
+    assert [t.run_id for t in manifest.targets] == [log.run_id for log in logs]
+    assert [log.run_id for log in logs] == [log.run_id for log in result.logs]
+
+
+def test_compare_builds_a_manifest_even_without_persistence(fake_providers):
+    # The manifest is the batch's expected shape, not a storage artifact - but it
+    # must not claim an archive status nobody attempted.
+    result = svc.compare("s", "q", [("good", "m1"), ("good", "m2")], persist=False)
+
+    assert result.manifest is not None
+    assert result.manifest.target_count == 2
+    assert result.manifest.persistence_status is None
+
+
+def test_a_lost_manifest_does_not_change_the_runs_verdict(monkeypatch, tmp_path):
+    # persistence_status is about the RUN rows; a manifest-only fault must not
+    # turn "every run archived" into a failed batch.
+    monkeypatch.setattr(registry, "PROVIDERS", {"good": GoodProvider()})
+
+    class _ManifestOnlyFault:
+        sink_name = "sqlite"
+
+        def write(self, log) -> None:
+            pass  # every run row lands fine
+
+        def write_group(self, manifest) -> None:
+            raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(
+        svc,
+        "default_repository",
+        lambda base_dir, db_path: LogRepository([_ManifestOnlyFault()]),
+    )
+
+    result = svc.compare("s", "q", [("good", "m1"), ("good", "m2")])
+
+    assert result.persistence_status == "partial"  # the archive IS incomplete...
+    assert [e.sink for e in result.persist_errors] == ["sqlite:manifest"]
+    # ...but the manifest itself recorded the runs' status from before its own
+    # write was attempted - it cannot know its own fate.
+    assert result.manifest.persistence_status == "complete"
 
 
 def test_ask_persists_to_db_and_jsonl(monkeypatch, tmp_path, temp_db):
