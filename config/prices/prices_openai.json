@@ -2,7 +2,7 @@
     "provider": "OpenAI",
     "currency": "USD",
     "unit": "per_1m_tokens",
-    "updated_at": "2026-08-12",
+    "updated_at": "2026-08-18",
     "source": "https://developers.openai.com/api/docs/pricing",
     "models": {
         "gpt-5.6-sol": {

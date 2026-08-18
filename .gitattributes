@@ -1,7 +1,16 @@
 ###############################################################################
 # Set default behavior to automatically normalize line endings.
+#
+# `auto`, not a bare `text`: with `auto` Git still sniffs for binary content and
+# leaves it byte-for-byte, whereas a bare `text` would rewrite line endings
+# inside binaries too. An unrecognised value (this line used to read
+# `text=UTF-8`) is silently treated as *unspecified*, which left normalization
+# up to each contributor's own core.autocrlf.
+#
+# This controls line endings only. Git has no attribute that normalizes
+# character encoding -- keep files UTF-8 via the editor / .editorconfig.
 ###############################################################################
-* text=UTF-8
+* text=auto
 
 ###############################################################################
 # Set default behavior for command prompt diff.

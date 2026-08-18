@@ -26,27 +26,29 @@ When fixing behavior, touch the layer that owns it: the shared flow → `runner.
 Run from the **project root** as a module (not `cd resources`):
 
 ```bash
-python -m resources.cli ask "<system_prompt>" "<user_question>"                 # default provider=openai, model=gpt-5.6-luna
-python -m resources.cli ask "<system_prompt>" "<user_question>" --provider anthropic --model claude-haiku-4-5
-python -m resources.cli compare "<system_prompt>" "<user_question>" -t openai:gpt-5.6-terra -t anthropic:claude-haiku-4-5
-python -m resources.cli check-env                                               # validate .env keys (interactive prompt)
-python -m resources.cli list-models                                             # list models across configured providers
-python -m resources.cli history -n 10                                           # recent calls, newest first (free; reads SQLite)
-python -m resources.cli history -g <group_id>                                   # one whole comparison batch, manifest-checked (no limit)
+uv run python -m resources.cli ask "<system_prompt>" "<user_question>"                 # default provider=openai, model=gpt-5.6-luna
+uv run python -m resources.cli ask "<system_prompt>" "<user_question>" --provider anthropic --model claude-haiku-4-5
+uv run python -m resources.cli compare "<system_prompt>" "<user_question>" -t openai:gpt-5.6-terra -t anthropic:claude-haiku-4-5
+uv run python -m resources.cli check-env                                               # validate .env keys (interactive prompt)
+uv run python -m resources.cli list-models                                             # list models across configured providers
+uv run python -m resources.cli history -n 10                                           # recent calls, newest first (free; reads SQLite)
+uv run python -m resources.cli history -g <group_id>                                   # one whole comparison batch, manifest-checked (no limit)
 ```
 
 `ask` and `compare` make real (paid) calls. `compare` requires at least one `--target/-t provider:model`, rejects a repeated model (compared on canonical price-table names, so an `alias_of` spelling like `gpt-4o-mini-2024-07-18` counts as its target `gpt-4o-mini`), and runs the targets in parallel (capped at `call_policy.MAX_PARALLEL_CALLS`) under one shared `group_id` (each target keeps its own `run_id`), so wall time is the slowest call rather than their sum. It prints answers in target order with per-call and total cost, plus the three status axes.
 
 `history` is free — it only reads the local SQLite DB.
 
-Environments & deps — development is consolidated on **Python 3.14** (standard build; free-threading and the JIT were evaluated and deliberately not used). Dependencies are pinned in a single `requirements.txt`, which includes the test-only `pytest`. Virtualenvs live in the working tree but are **gitignored** (`.venv*/`), so a fresh clone has none — older `.venv_py312`/`.venv_py313` directories may still exist locally and are leftovers.
+Environments & deps — **uv** owns both the interpreter and the packages. Development is consolidated on **Python 3.14** (standard build; free-threading and the JIT were evaluated and deliberately not used), pinned in `.python-version`, which uv reads and fetches on its own. `pyproject.toml` lists only the **direct** dependencies (exact `==` pins); every transitive is resolved into `uv.lock`, and both files are tracked — `uv.lock` is the reproducibility guarantee, so never hand-edit it. `pytest` and `ruff` live in the `dev` dependency group, which `uv sync` installs by default (`--no-dev` for a runtime-only env). There is **no `requirements.txt`**; generate one on demand with `uv export --no-dev --no-hashes --format requirements.txt -o requirements.txt`. Virtualenvs live in the working tree but are **gitignored** (`.venv*/`), so a fresh clone has none — older `.venv_py312`/`.venv_py313` directories may still exist locally and are leftovers.
+
+CI (`.github/workflows/ci.yml`) uses `astral-sh/setup-uv` and runs `uv sync --locked`, which **fails the build if `uv.lock` has drifted from `pyproject.toml`** — so a dependency edit must be committed together with its re-lock. Dependabot tracks the `uv` ecosystem and bumps the pin plus the lock in one PR.
 
 Database — the SQLite file `_db/llm_responses.db` is created/seeded from `_db/_create_table.sql` (run it once with the `sqlite3` CLI or any client). `storage_sqlite.py` connects to an **existing** DB and only `ALTER`s in missing audit columns; it does not create the core tables. The one exception is `comparison_groups` (`ensure_comparison_groups`, `CREATE TABLE IF NOT EXISTS`): it arrived after live databases existed, and a whole missing table cannot be `ALTER`ed in.
 
 Tests — the pytest suite lives in `tests/` (config in `pyproject.toml` sets `testpaths = ["tests"]`). It makes **no paid calls**: provider parsing is tested with fake SDK responses, and the service layer by injecting fakes into `registry.PROVIDERS` and calling `service_ask.ask(..., persist=False)`. Shared fakes/fixtures are in `tests/fakes.py` and `tests/conftest.py`. The legacy `test/` (singular) holds the author's older ad-hoc scripts that hit real APIs; those are intentionally excluded from collection. Run from the project root:
 
 ```bash
-python -m pytest
+uv run pytest
 ```
 
 ## Data flow (the `ask` path)

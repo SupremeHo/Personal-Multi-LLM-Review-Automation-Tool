@@ -28,23 +28,39 @@
 * **데이터 검증:** Pydantic (`extra="forbid"` 적용, 프로바이더 중립적인 엄격한 스키마)
 * **프로바이더:** OpenAI ✅, Anthropic ✅, Google/Gemini ✅
 * **데이터베이스:** SQLite3 (로컬 로깅 및 분석 쿼리용)
-* **환경 관리:** `venv` + `python-dotenv`를 통한 안전한 API 키 처리
+* **환경 및 의존성 관리:** [uv](https://docs.astral.sh/uv/) (`uv.lock`으로 버전 고정), 안전한 API 키 처리는 `python-dotenv`
 
 ## 🚀 사용법
 
 ### 1. 사전 준비
 
-Python 3.14를 설치하고, 가상 환경을 만든 뒤 고정된(pinned) 의존성을 설치하세요:
+의존성과 Python 툴체인 모두 [uv](https://docs.astral.sh/uv/)가 관리합니다. uv는 한 번만 설치하면 됩니다:
 
-```bash
-python -m venv .venv
-# Windows: .venv\Scripts\activate
-# macOS/Linux: source .venv/bin/activate
-
-pip install -r requirements.txt
+```powershell
+# Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-`requirements.txt`에 테스트/린트 도구(`pytest`, `ruff`)도 함께 들어 있어, 테스트 실행을 위해 별도로 설치할 것은 없습니다.
+```bash
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+이후 프로젝트 루트에서:
+
+```bash
+uv sync
+```
+
+이 명령 하나가 `.python-version`(3.14)을 읽어 해당 인터프리터가 없으면 내려받고, `.venv/`를 만들고, `uv.lock`에 고정된 정확한 버전으로 모든 의존성을 설치합니다. 별도의 `venv` 생성이나 `pip install` 단계는 없습니다. 테스트/린트 도구(`pytest`, `ruff`)는 `dev` 의존성 그룹에 있으며 기본으로 함께 설치됩니다. 런타임 의존성만 필요하면 `uv sync --no-dev`를 쓰세요.
+
+아래 명령들은 `uv run` 접두사를 붙여 표기했습니다. 이 접두사는 venv를 활성화하지 않고도 해당 환경에서 명령을 실행합니다. venv를 직접 활성화하는 편이 좋다면(Windows는 `.venv\Scripts\activate`, 그 외는 `source .venv/bin/activate`) 접두사를 빼면 됩니다.
+
+저장소에 `requirements.txt`는 없습니다. `pyproject.toml`과 `uv.lock`이 유일한 기준입니다. pip 기반 워크플로용으로 필요하다면 lock 파일에서 생성하세요:
+
+```bash
+uv export --no-dev --no-hashes --format requirements.txt -o requirements.txt
+```
 
 ### 2. 환경 변수 설정
 
@@ -82,7 +98,7 @@ GEMINI_API_KEY=your-gemini-api-key-here
 설정 상태는 언제든 아래 명령으로 검증할 수 있습니다:
 
 ```bash
-python -m resources.cli check-env
+uv run python -m resources.cli check-env
 ```
 
 ### 3. 로컬 설정 (비용)
@@ -130,28 +146,28 @@ sqlite3 _db/llm_responses.db < _db/_create_table.sql
 **단일 프로바이더/모델에 질문:**
 
 ```bash
-python -m resources.cli ask "<system_prompt>" "<user_question>"
+uv run python -m resources.cli ask "<system_prompt>" "<user_question>"
 # 기본값: --provider openai --model gpt-5.6-luna
 
-python -m resources.cli ask "<system_prompt>" "<user_question>" \
+uv run python -m resources.cli ask "<system_prompt>" "<user_question>" \
   --provider anthropic --model claude-haiku-4-5
 ```
 
 **여러 모델을 비교** (핵심 "리뷰" 기능) — `--target/-t provider:model`을 최소 1개 지정해야 하고 동일한 `provider:model`은 중복 지정할 수 없습니다. 답변은 지정한 타겟 순서대로 출력됩니다. 각 호출은 자체 `run_id`를 갖고 하나의 공유 `group_id`로 묶입니다:
 
 ```bash
-python -m resources.cli compare "<system_prompt>" "<user_question>" \
+uv run python -m resources.cli compare "<system_prompt>" "<user_question>" \
   -t openai:gpt-5.6-terra -t anthropic:claude-haiku-4-5
 ```
 
 **기타 명령어:**
 
 ```bash
-python -m resources.cli check-env      # .env 키 검증 (대화형)
-python -m resources.cli list-models    # 설정된 프로바이더별 모델 목록
-python -m resources.cli history        # 최근 호출 조회 (최신순)
-python -m resources.cli history -n 20              # 최근 20건 조회
-python -m resources.cli history --group <group_id> # 한 비교(compare)의 호출들만 조회
+uv run python -m resources.cli check-env      # .env 키 검증 (대화형)
+uv run python -m resources.cli list-models    # 설정된 프로바이더별 모델 목록
+uv run python -m resources.cli history        # 최근 호출 조회 (최신순)
+uv run python -m resources.cli history -n 20              # 최근 20건 조회
+uv run python -m resources.cli history --group <group_id> # 한 비교(compare)의 호출들만 조회
 ```
 
 * **`system_prompt`**은 LLM이 어떻게 응답할지 미리 규정하는 지시문입니다.
@@ -186,7 +202,7 @@ cli.py                                      # 얇은 Typer 계층: 인자 파싱
 pytest 스위트는 `tests/`에 있으며 **유료 호출을 전혀 하지 않습니다** — 프로바이더 파싱은 가짜(fake) SDK 응답으로, 서비스 계층은 레지스트리에 가짜를 주입해 테스트합니다. 프로젝트 루트에서 실행하세요:
 
 ```bash
-python -m pytest
+uv run pytest
 ```
 
 ## 🤝 기여 가이드

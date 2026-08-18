@@ -1,10 +1,27 @@
 [project]
-name = "Personal Multi-LLM Review Automation Tool"
+name = "Personal-Multi-LLM-Review-Automation-Tool"
 version = "0.1.925"
 description = "A multi-LLM platform that automates cross-validation of answers from multiple LLMs."
 readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "anthropic==0.122.0",
+    "google-genai==2.18.1",
+    "httpx==0.28.1",
+    "openai==3.0.0",
+    "pydantic==2.13.4",
+    "python-dotenv==1.2.2",
+    "rich==15.0.0",
+    "typer==0.27.1",
+]
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "ruff==0.16.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/SupremeHo/Personal-Multi-LLM-Review-Automation-Tool"
@@ -15,10 +32,7 @@ Issues = "https://github.com/SupremeHo/Personal-Multi-LLM-Review-Automation-Tool
 # Only collect the pytest suite under tests/; the legacy test/ scripts make real
 # API calls and are not part of the automated suite.
 testpaths = ["tests"]
-filterwarnings = [
-    "error",
-    'ignore::DeprecationWarning:google\.genai\.types',
-]
+filterwarnings = ["error", 'ignore::DeprecationWarning:google\.genai\.types']
 
 [tool.ruff]
 target-version = "py314"
@@ -78,3 +92,4 @@ preview = false
 quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
+
