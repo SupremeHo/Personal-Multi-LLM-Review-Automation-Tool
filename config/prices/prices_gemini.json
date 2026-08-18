@@ -2,13 +2,18 @@
     "provider": "Google",
     "currency": "USD",
     "unit": "per_1m_tokens",
-    "updated_at": "2026-08-12",
+    "updated_at": "2026-08-18",
     "source": "https://ai.google.dev/gemini-api/docs/pricing?hl=ko",
     "models": {
+        "gemini-3.7-flash": {
+            "input": 0.75,
+            "cached_input": 0.075,
+            "output": 3.75
+        },
         "gemini-3.6-flash": {
-            "input": 1.50,
-            "cached_input": 0.15,
-            "output": 7.50
+            "input": 0.75,
+            "cached_input": 0.075,
+            "output": 3.75
         },
         "gemini-3.5-flash": {
             "input": 1.50,
