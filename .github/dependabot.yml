@@ -3,8 +3,10 @@
 version: 2
 
 updates:
-  # Picks up requirements.txt in the repo root.
-  - package-ecosystem: "pip"
+  # The uv ecosystem reads pyproject.toml + uv.lock in the repo root. Dependabot
+  # bumps the `==` pin in pyproject.toml and re-locks in the same PR, so the two
+  # never drift apart.
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -27,7 +29,8 @@ updates:
           - "google-genai"
           - "google-auth*"
           - "ollama"
-      # Test and lint toolchain.
+      # Test and lint toolchain (the `dev` dependency group, plus the pytest
+      # transitives that ride along with it in the lockfile).
       dev-tools:
         patterns:
           - "pytest*"

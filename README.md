@@ -28,23 +28,39 @@ This project starts as a personal research automation tool to assist with busine
 * **Data Validation:** Pydantic (Strict, provider-neutral schemas with `extra="forbid"`)
 * **Providers:** OpenAI ✅, Anthropic ✅, Google/Gemini ✅
 * **Database:** SQLite3 (For local logging and analytical queries)
-* **Environment Management:** `venv` with `python-dotenv` for secure API key handling
+* **Environment & Dependency Management:** [uv](https://docs.astral.sh/uv/) (locked via `uv.lock`), with `python-dotenv` for secure API key handling
 
 ## 🚀 Usage
 
 ### 1. Prerequisites
 
-Ensure you have Python 3.14 installed, create a virtual environment, and install the pinned dependencies:
+Dependencies **and** the Python toolchain are managed by [uv](https://docs.astral.sh/uv/). Install it once:
 
-```bash
-python -m venv .venv
-# On Windows: .venv\Scripts\activate
-# On macOS/Linux: source .venv/bin/activate
-
-pip install -r requirements.txt
+```powershell
+# Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-`requirements.txt` also carries the test and lint tooling (`pytest`, `ruff`), so no extra install step is needed to run the suite.
+```bash
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Then, from the project root:
+
+```bash
+uv sync
+```
+
+That single command reads `.python-version` (3.14) and fetches that interpreter if it is missing, creates `.venv/`, and installs every dependency at the exact version pinned in `uv.lock`—there is no separate `venv` or `pip install` step. The test and lint tooling (`pytest`, `ruff`) lives in the `dev` dependency group and is installed by default; `uv sync --no-dev` gives a runtime-only environment.
+
+The commands below use the `uv run` prefix, which runs them inside that environment without activating it. If you would rather activate the venv (`.venv\Scripts\activate` on Windows, `source .venv/bin/activate` elsewhere), drop the prefix.
+
+There is no `requirements.txt` in the repo—`pyproject.toml` and `uv.lock` are the single source of truth. If you need one for a pip-only workflow, generate it from the lockfile:
+
+```bash
+uv export --no-dev --no-hashes --format requirements.txt -o requirements.txt
+```
 
 ### 2. Environment Setup
 
@@ -82,7 +98,7 @@ The `.env` file is loaded once at startup (`resources/env.py`, called from `reso
 Validate your setup at any time with:
 
 ```bash
-python -m resources.cli check-env
+uv run python -m resources.cli check-env
 ```
 
 ### 3. Local Configuration (Pricing)
@@ -130,28 +146,28 @@ Run from the **project root** as a module (not `cd resources`). `ask` and `compa
 **Ask a single provider/model:**
 
 ```bash
-python -m resources.cli ask "<system_prompt>" "<user_question>"
+uv run python -m resources.cli ask "<system_prompt>" "<user_question>"
 # defaults: --provider openai --model gpt-5.6-luna
 
-python -m resources.cli ask "<system_prompt>" "<user_question>" \
+uv run python -m resources.cli ask "<system_prompt>" "<user_question>" \
   --provider anthropic --model claude-haiku-4-5
 ```
 
 **Compare several models** (the core "review" feature)—requires at least one `--target/-t provider:model`, and the same `provider:model` may not be repeated. Answers print in the order you listed the targets. Each call gets its own `run_id`, all tied together by one shared `group_id`:
 
 ```bash
-python -m resources.cli compare "<system_prompt>" "<user_question>" \
+uv run python -m resources.cli compare "<system_prompt>" "<user_question>" \
   -t openai:gpt-5.6-terra -t anthropic:claude-haiku-4-5
 ```
 
 **Other commands:**
 
 ```bash
-python -m resources.cli check-env      # validate .env keys (interactive)
-python -m resources.cli list-models    # list models across configured providers
-python -m resources.cli history        # show recent calls (newest first)
-python -m resources.cli history -n 20              # show the last 20 calls
-python -m resources.cli history --group <group_id> # show one comparison's calls
+uv run python -m resources.cli check-env      # validate .env keys (interactive)
+uv run python -m resources.cli list-models    # list models across configured providers
+uv run python -m resources.cli history        # show recent calls (newest first)
+uv run python -m resources.cli history -n 20              # show the last 20 calls
+uv run python -m resources.cli history --group <group_id> # show one comparison's calls
 ```
 
 * **`system_prompt`** is an instruction that predetermines how the LLM should respond.
@@ -186,7 +202,7 @@ cli.py                                      # thin Typer layer: parse args → d
 The pytest suite lives in `tests/` and makes **no paid calls**—provider parsing is tested with fake SDK responses, and the service layer by injecting fakes into the registry. Run from the project root:
 
 ```bash
-python -m pytest
+uv run pytest
 ```
 
 ## 🤝 Contribution Guide
