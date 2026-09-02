@@ -391,3 +391,6 @@ Thumbs.db
 *.mmd
 .claude/
 _logs/
+*.bkp
+*.drawio
+*.drawio.png
