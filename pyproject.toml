@@ -5,24 +5,24 @@ description = "A multi-LLM platform that automates cross-validation of answers f
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "anthropic==0.122.0",
-    "flet>=0.86.5",
-    "google-genai==2.18.1",
-    "httpx==0.28.1",
-    "openai==3.1.0",
-    "pydantic==2.13.4",
-    "python-dotenv==1.2.2",
-    "rich==15.0.0",
-    "typer==0.27.1",
+  "anthropic==0.122.0",
+  "flet>=1.0.0",
+  "flet-cli>=1.0.0",
+  "flet-desktop>=1.0.0",
+  "google-genai==2.18.1",
+  "httpx==0.28.1",
+  "openai==3.1.0",
+  "pydantic==2.13.4",
+  "python-dotenv==1.2.2",
+  "rich==15.0.0",
+  "ruff>=0.16.3",
+  "typer==0.27.1",
 ]
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 
 [dependency-groups]
-dev = [
-    "pytest==9.1.1",
-    "ruff==0.16.3",
-]
+dev = ["pytest==9.1.1", "ruff==0.16.3"]
 
 [project.urls]
 Homepage = "https://github.com/SupremeHo/Personal-Multi-LLM-Review-Automation-Tool"
@@ -93,4 +93,3 @@ preview = false
 quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
-
